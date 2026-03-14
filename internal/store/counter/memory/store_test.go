@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 )
@@ -69,5 +70,33 @@ func TestMemoryStoreExpiryHelpers(t *testing.T) {
 	time.Sleep(5 * time.Millisecond)
 	if c, _ := s.CountAfter(context.Background(), "ts-exp", time.Now().Add(-time.Hour)); c != 0 {
 		t.Fatalf("expired timestamps should be cleaned")
+	}
+}
+
+func TestNewShardedFallback(t *testing.T) {
+	s := NewSharded(0)
+	if s == nil || len(s.shards) != 1 {
+		t.Fatalf("expected single shard fallback")
+	}
+}
+
+func TestMemoryStoreConcurrentIncrement(t *testing.T) {
+	s := NewSharded(32)
+	const goroutines = 20
+	const perG = 50
+	var wg sync.WaitGroup
+	for i := 0; i < goroutines; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < perG; j++ {
+				_, _ = s.Increment(context.Background(), "hot-key", 1, 0)
+			}
+		}()
+	}
+	wg.Wait()
+	v, _ := s.Get(context.Background(), "hot-key")
+	if v != goroutines*perG {
+		t.Fatalf("unexpected concurrent increment value: %d", v)
 	}
 }

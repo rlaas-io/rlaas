@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"rlaas/internal/server"
 )
@@ -143,4 +144,37 @@ func TestPublishInvalidation(t *testing.T) {
 
 	publishInvalidation(context.Background(), &http.Client{}, nil, map[string]string{"policy_id": "p1"})
 	publishInvalidation(context.Background(), nil, []string{ts.URL}, map[string]string{"policy_id": "p1"})
+}
+
+func TestStartInvalidationDispatcher(t *testing.T) {
+	var calls atomic.Int64
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/agent/invalidate" && r.Method == http.MethodPost {
+			calls.Add(1)
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	enqueue := startInvalidationDispatcher(&http.Client{}, []string{ts.URL}, nil)
+	enqueue(map[string]string{"policy_id": "p1"})
+	enqueue(map[string]string{"policy_id": "p2"})
+
+	for i := 0; i < 40 && calls.Load() < 2; i++ {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if calls.Load() < 2 {
+		t.Fatalf("expected async dispatcher to deliver events")
+	}
+}
+
+func TestCopyEvent(t *testing.T) {
+	in := map[string]string{"policy_id": "p1"}
+	out := copyEvent(in)
+	out["policy_id"] = "p2"
+	if in["policy_id"] != "p1" {
+		t.Fatalf("expected source map unchanged")
+	}
 }
