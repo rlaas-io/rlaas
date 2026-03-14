@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Features — RLAAS</title>
+  <meta name="description" content="Complete feature overview for RLAAS — algorithms, actions, matching dimensions, deployment modes, backends, and more." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Lora:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav"><div class="nav-inner">
+  <a href="index.html" class="nav-logo">RLAAS<span>.</span></a>
+  <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+  </button>
+  <ul class="nav-links">
+    <li><a href="index.html">Home</a></li>
+    <li><a href="features.html" class="active">Features</a></li>
+    <li><a href="design.html">Design</a></li>
+    <li><a href="api.html">API</a></li>
+    <li><a href="sdks.html">SDKs</a></li>
+    <li><a href="getting-started.html">Get Started</a></li>
+  </ul>
+</div></nav>
+
+<!-- HERO -->
+<header class="hero" style="padding:4rem 2rem 3.5rem;">
+  <h1 style="font-size:2.5rem;">Feature Overview</h1>
+  <p class="subtitle">Everything RLAAS supports — algorithms, actions, matching, backends, deployment modes, and performance optimizations.</p>
+</header>
+
+<!-- ═══════════════════════════ ALGORITHMS ═══════════════════════════ -->
+<section class="content">
+<h2>Rate Limiting Algorithms</h2>
+<p>Seven battle-tested algorithms, all behind a unified <code>Evaluator</code> interface.</p>
+
+<div class="info-cards" style="margin-bottom:2rem;">
+  <div class="info-card">
+    <h4>Fixed Window</h4>
+    <p>Count requests within a fixed interval. Simple, cheap, easy to understand. Great for org-wide basic limits.<br><strong>Trade-off:</strong> burst at window boundaries.</p>
+  </div>
+  <div class="info-card">
+    <h4>Sliding Window Log</h4>
+    <p>Store timestamps of all events and count within rolling window. Very accurate, exact enforcement.<br><strong>Trade-off:</strong> memory-heavy, expensive at scale.</p>
+  </div>
+  <div class="info-card">
+    <h4>Sliding Window Counter</h4>
+    <p>Approximate rolling window using sub-buckets and interpolation. Better fairness than fixed window.<br><strong>Trade-off:</strong> approximation complexity.</p>
+  </div>
+  <div class="info-card">
+    <h4>Token Bucket</h4>
+    <p>Tokens refill over time; each request consumes tokens. Industry standard for APIs, supports bursts well.<br><strong>Trade-off:</strong> refill math &amp; atomic updates.</p>
+  </div>
+  <div class="info-card">
+    <h4>Leaky Bucket</h4>
+    <p>Queue requests into a bucket drained at steady rate. Smooth traffic shaping for egress.<br><strong>Trade-off:</strong> less intuitive than token bucket.</p>
+  </div>
+  <div class="info-card">
+    <h4>Concurrency Limiter</h4>
+    <p>Limit simultaneously in-flight operations. Protect heavy dependencies and expensive tasks.<br><strong>Trade-off:</strong> requires acquire/release lifecycle.</p>
+  </div>
+  <div class="info-card">
+    <h4>Quota / Budget Limiter</h4>
+    <p>Long-window budget (per-day/week/month). Perfect for SaaS plans and telemetry budgets.<br><strong>Trade-off:</strong> not enough for short-burst protection alone.</p>
+  </div>
+</div>
+</section>
+
+<hr style="max-width:780px;margin:0 auto;" />
+
+<!-- ═══════════════════════════ ACTIONS ═══════════════════════════ -->
+<section class="content">
+<h2>Action Types</h2>
+<p>Go beyond allow/deny. RLAAS supports eight actions per policy:</p>
+
+<table>
+  <thead><tr><th>Action</th><th>Description</th><th>Example</th></tr></thead>
+  <tbody>
+    <tr><td><span class="tag tag-green" style="margin:0;">Allow</span></td><td>Request passes without modification</td><td>Within limits</td></tr>
+    <tr><td><span class="tag tag-red" style="margin:0;">Deny</span></td><td>Reject entirely — HTTP 429 or gRPC RESOURCE_EXHAUSTED</td><td>Rate exceeded</td></tr>
+    <tr><td><span class="tag tag-amber" style="margin:0;">Delay</span></td><td>Allow after a configurable wait period</td><td>Egress calls, background jobs</td></tr>
+    <tr><td><span class="tag tag-blue" style="margin:0;">Sample</span></td><td>Allow only a fraction of requests/events</td><td>Keep 10% of debug logs</td></tr>
+    <tr><td><span class="tag tag-red" style="margin:0;">Drop</span></td><td>Discard event without processing</td><td>Low-value debug telemetry</td></tr>
+    <tr><td><span class="tag tag-purple" style="margin:0;">Downgrade</span></td><td>Reduce priority or transform handling</td><td>Standard pipeline instead of premium</td></tr>
+    <tr><td><span class="tag tag-gray" style="margin:0;">Drop Low Priority</span></td><td>Preserve high-value events, drop low-priority ones</td><td>Mixed-priority event streams</td></tr>
+    <tr><td><span class="tag tag-purple" style="margin:0;">Shadow Only</span></td><td>Record decision without enforcing</td><td>Pre-rollout dry run</td></tr>
+  </tbody>
+</table>
+</section>
+
+<hr style="max-width:780px;margin:0 auto;" />
+
+<!-- ═══════════════════════════ MATCHING ═══════════════════════════ -->
+<section class="content">
+<h2>Policy Matching Dimensions</h2>
+<p>Match on 20+ dimensions for fine-grained control. Every field is optional — use as many or as few as your use case requires.</p>
+
+<div class="tag-group" style="margin-bottom:2rem;">
+  <span class="tag tag-blue">org_id</span>
+  <span class="tag tag-blue">tenant_id</span>
+  <span class="tag tag-blue">application</span>
+  <span class="tag tag-blue">service</span>
+  <span class="tag tag-blue">environment</span>
+  <span class="tag tag-green">signal_type</span>
+  <span class="tag tag-green">operation</span>
+  <span class="tag tag-green">endpoint</span>
+  <span class="tag tag-green">method</span>
+  <span class="tag tag-purple">user_id</span>
+  <span class="tag tag-purple">api_key</span>
+  <span class="tag tag-purple">client_id</span>
+  <span class="tag tag-purple">source_ip</span>
+  <span class="tag tag-amber">region</span>
+  <span class="tag tag-amber">resource</span>
+  <span class="tag tag-amber">severity</span>
+  <span class="tag tag-amber">span_name</span>
+  <span class="tag tag-amber">topic</span>
+  <span class="tag tag-amber">consumer_group</span>
+  <span class="tag tag-amber">job_type</span>
+  <span class="tag tag-gray">tags (key=value)</span>
+</div>
+
+<h3>Precedence Order (most → least specific)</h3>
+<ol>
+  <li>User-level override</li>
+  <li>API key / client override</li>
+  <li>Endpoint + method</li>
+  <li>Operation</li>
+  <li>Service</li>
+  <li>Application</li>
+  <li>Tenant</li>
+  <li>Org</li>
+  <li>Signal type</li>
+  <li>Global default</li>
+</ol>
+
+<h3>Advanced match_expr Expressions</h3>
+<p>For complex conditions, use <code>match_expr</code> in policy metadata:</p>
+<pre><code>match_expr: "region==us-east-1 && tag.env==production && method!=DELETE"</code></pre>
+<p>Supports <code>==</code>, <code>!=</code> operators with <code>&&</code> conjunction. Fields include all scope dimensions plus <code>tag.</code> prefix for tag lookups.</p>
+</section>
+
+<hr style="max-width:780px;margin:0 auto;" />
+
+<!-- ═══════════════════════════ DEPLOYMENT ═══════════════════════════ -->
+<section class="content">
+<h2>Deployment Models</h2>
+
+<div class="info-cards">
+  <div class="info-card" style="border-left:4px solid #4361ee;">
+    <h4>Mode A: Embedded Go SDK</h4>
+    <p>Import as a Go library. Sub-millisecond decisions, no network hop. Best for Go services, OTEL collectors, latency-sensitive workloads.</p>
+  </div>
+  <div class="info-card" style="border-left:4px solid #22c55e;">
+    <h4>Mode B: Centralized HTTP/gRPC</h4>
+    <p>Language-agnostic decision service. Centralized governance and telemetry. Best for polyglot environments and easy version management.</p>
+  </div>
+  <div class="info-card" style="border-left:4px solid #f59e0b;">
+    <h4>Mode C: Sidecar / Agent</h4>
+    <p>Local proxy in Kubernetes. Low latency with central governance. Local caching + invalidation sync. Best for K8s and team-wide standardization.</p>
+  </div>
+  <div class="info-card" style="border-left:4px solid #8b5cf6;">
+    <h4>Mode D: Hybrid (Recommended)</h4>
+    <p>All three simultaneously. SDK for Go, centralized for non-Go, sidecar for K8s. Maximum flexibility and future extensibility.</p>
+  </div>
+</div>
+</section>
+
+<hr style="max-width:780px;margin:0 auto;" />
+
+<!-- ═══════════════════════════ BACKENDS ═══════════════════════════ -->
+<section class="content">
+<h2>Backend Support</h2>
+
+<h3>Counter Stores (Hot Path)</h3>
+<table>
+  <thead><tr><th>Backend</th><th>Status</th><th>Best For</th></tr></thead>
+  <tbody>
+    <tr><td><strong>In-Memory (Sharded)</strong></td><td><span class="tag tag-green" style="margin:0;">Available</span></td><td>Local/single-instance, fallback</td></tr>
+    <tr><td><strong>Redis</strong></td><td><span class="tag tag-green" style="margin:0;">Available</span></td><td>Distributed, multi-node</td></tr>
+    <tr><td><strong>PostgreSQL</strong></td><td><span class="tag tag-amber" style="margin:0;">Roadmap</span></td><td>Low-volume, compliance</td></tr>
+    <tr><td><strong>Oracle</strong></td><td><span class="tag tag-amber" style="margin:0;">Roadmap</span></td><td>Enterprise, compliance</td></tr>
+  </tbody>
+</table>
+
+<h3>Policy Stores (Config)</h3>
+<table>
+  <thead><tr><th>Backend</th><th>Status</th><th>Best For</th></tr></thead>
+  <tbody>
+    <tr><td><strong>File (JSON)</strong></td><td><span class="tag tag-green" style="margin:0;">Available</span></td><td>Local dev, testing</td></tr>
+    <tr><td><strong>PostgreSQL</strong></td><td><span class="tag tag-amber" style="margin:0;">Roadmap</span></td><td>Production persistence</td></tr>
+    <tr><td><strong>Oracle</strong></td><td><span class="tag tag-amber" style="margin:0;">Roadmap</span></td><td>Enterprise persistence</td></tr>
+    <tr><td><strong>Custom Adapter</strong></td><td><span class="tag tag-green" style="margin:0;">Interface Ready</span></td><td>Legacy table migration</td></tr>
+  </tbody>
+</table>
+</section>
+
+<hr style="max-width:780px;margin:0 auto;" />
+
+<!-- ═══════════════════════════ PERFORMANCE ═══════════════════════════ -->
+<section class="content">
+<h2>Performance &amp; Optimizations</h2>
+
+<div class="callout callout-tip">
+  <strong>Benchmark Results</strong>
+  All benchmarks run with <code>go test ./benchmarks -bench . -benchmem</code>. Zero heap allocations on hot paths.
+</div>
+
+<table>
+  <thead><tr><th>Operation</th><th>Latency</th><th>Allocations</th></tr></thead>
+  <tbody>
+    <tr><td>Memory store increment (single key)</td><td>~105–162 ns/op</td><td>0 allocs</td></tr>
+    <tr><td>Memory store increment (many keys)</td><td>~6–7 ns/op</td><td>0 allocs</td></tr>
+    <tr><td>Fixed window evaluation</td><td>~1,600 ns/op</td><td>16 allocs</td></tr>
+    <tr><td>HTTP /v1/check handler</td><td>~10,000 ns/op</td><td>—</td></tr>
+    <tr><td>HTTP acquire+release</td><td>~16,500 ns/op</td><td>—</td></tr>
+  </tbody>
+</table>
+
+<h3>Optimizations Implemented</h3>
+<ul>
+  <li><strong>Lock-Sharded Counters:</strong> 64 shards default, FNV32a hash, per-shard mutex — eliminates global lock contention</li>
+  <li><strong>Async Invalidation Dispatcher:</strong> 256-item buffered queue, up to 4 workers decouple API latency from webhook delivery</li>
+  <li><strong>Bounded Worker Pool:</strong> Up to 8 goroutines for publishInvalidation fanout — prevents goroutine explosion</li>
+  <li><strong>Burst Coalescing:</strong> Sidecar drains invalidation channel to avoid redundant sync cycles</li>
+  <li><strong>Zero-Allocation Hot Path:</strong> Counter operations allocate nothing on the heap</li>
+</ul>
+</section>
+
+<hr style="max-width:780px;margin:0 auto;" />
+
+<!-- ═══════════════════════════ CONTROL PLANE ═══════════════════════════ -->
+<section class="content">
+<h2>Control Plane Features</h2>
+
+<div class="info-cards">
+  <div class="info-card">
+    <h4>Policy CRUD</h4>
+    <p>Create, read, update, delete policies via REST API. Full validation before persistence.</p>
+  </div>
+  <div class="info-card">
+    <h4>Audit Trail</h4>
+    <p>Every policy change recorded with action type, old/new values, timestamp. Query via API.</p>
+  </div>
+  <div class="info-card">
+    <h4>Version History</h4>
+    <p>Complete version history for each policy. Rollback to any previous version with one API call.</p>
+  </div>
+  <div class="info-card">
+    <h4>Gradual Rollout</h4>
+    <p>Set rollout_percent from 0–100. Shadow mode for dry-run. Progressive enforcement.</p>
+  </div>
+  <div class="info-card">
+    <h4>Policy Validation</h4>
+    <p>Validate policy definitions before deployment to catch misconfigurations early.</p>
+  </div>
+  <div class="info-card">
+    <h4>Analytics Summary</h4>
+    <p>Event and tag aggregation with optional top-N. Understand traffic patterns and decision distribution.</p>
+  </div>
+</div>
+</section>
+
+<hr style="max-width:780px;margin:0 auto;" />
+
+<!-- ═══════════════════════════ ADVANCED ═══════════════════════════ -->
+<section class="content">
+<h2>Advanced Capabilities</h2>
+
+<h3>OTEL Processor Primitives</h3>
+<p>Batch-process logs and spans through rate-limiting policies. Worker pool with configurable concurrency. Supports fail-open and fail-closed modes. Collect processor stats (checked, allowed, denied, errors).</p>
+
+<h3>Multi-Region Allocation</h3>
+<p>Weighted proportional split of global limits across regions. Overflow detection when a region exceeds its allocation. Remainder correction ensures exact total distribution.</p>
+
+<h3>Non-Go Client SDKs</h3>
+<p>Full-featured HTTP client SDKs for Python, TypeScript, Java, and .NET. All support check, acquire/release, policy CRUD, validate/rollout/rollback, audit/versions, and analytics.</p>
+
+<h3>Sidecar Invalidation</h3>
+<p>In-process broker with async push fanout to sidecars. Bounded workers prevent HTTP request storms. Sidecars coalesce burst invalidations into single sync operations.</p>
+</section>
+
+<!-- CTA -->
+<section style="background:var(--bg-hero);color:#fff;text-align:center;padding:4rem 2rem;">
+  <h2 style="color:#fff;margin-top:0;">Explore the Full Design</h2>
+  <p style="color:rgba(255,255,255,.7);max-width:500px;margin:0 auto 2rem;">Dive into the complete architecture, domain model, and implementation details.</p>
+  <a href="design.html" class="btn btn-primary">Read the Design Document →</a>
+</section>
+
+<!-- FOOTER -->
+<footer class="footer">
+  <div class="footer-inner">
+    <ul class="footer-links">
+      <li><a href="index.html">Home</a></li>
+      <li><a href="features.html">Features</a></li>
+      <li><a href="design.html">Design</a></li>
+      <li><a href="api.html">API</a></li>
+      <li><a href="sdks.html">SDKs</a></li>
+      <li><a href="getting-started.html">Get Started</a></li>
+    </ul>
+    <p>RLAAS — Rate Limiting As A Service &copy; 2024&ndash;2026</p>
+  </div>
+</footer>
+
+<button class="scroll-top" id="scrollTop" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Scroll to top">
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+</button>
+<script>window.addEventListener('scroll',()=>{document.getElementById('scrollTop').classList.toggle('visible',window.scrollY>400);});</script>
+</body>
+</html>

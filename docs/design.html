@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Design Document — RLAAS</title>
+  <meta name="description" content="Complete architecture and design document for RLAAS — the hybrid rate-limiting platform." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Lora:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav"><div class="nav-inner">
+  <a href="index.html" class="nav-logo">RLAAS<span>.</span></a>
+  <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+  </button>
+  <ul class="nav-links">
+    <li><a href="index.html">Home</a></li>
+    <li><a href="features.html">Features</a></li>
+    <li><a href="design.html" class="active">Design</a></li>
+    <li><a href="api.html">API</a></li>
+    <li><a href="sdks.html">SDKs</a></li>
+    <li><a href="getting-started.html">Get Started</a></li>
+  </ul>
+</div></nav>
+
+<!-- LAYOUT -->
+<div class="layout-with-sidebar">
+
+<!-- SIDEBAR TOC -->
+<aside class="sidebar">
+  <h4>On this page</h4>
+  <ul>
+    <li><a href="#executive-summary">Executive Summary</a></li>
+    <li><a href="#goals">Goals</a></li>
+    <li><a href="#architecture">Architecture</a></li>
+    <li><a href="#deployment-modes">Deployment Modes</a></li>
+    <li><a href="#principles">Core Principles</a></li>
+    <li><a href="#use-cases">Use Cases</a></li>
+    <li><a href="#domain-model">Domain Model</a></li>
+    <li><a href="#algorithms">Algorithms</a></li>
+    <li><a href="#actions">Actions</a></li>
+    <li><a href="#counter-storage">Counter Storage</a></li>
+    <li><a href="#policy-storage">Policy Storage</a></li>
+    <li><a href="#failure-behavior">Failure Behavior</a></li>
+    <li><a href="#shadow-rollout">Shadow &amp; Rollout</a></li>
+    <li><a href="#multi-tenancy">Multi-Tenancy</a></li>
+    <li><a href="#caching">Caching</a></li>
+    <li><a href="#matching">Policy Matching</a></li>
+    <li><a href="#key-construction">Key Construction</a></li>
+    <li><a href="#integrations">Integrations</a></li>
+    <li><a href="#observability">Observability</a></li>
+    <li><a href="#security">Security</a></li>
+    <li><a href="#performance">Performance</a></li>
+    <li><a href="#package-structure">Package Structure</a></li>
+    <li><a href="#implementation-phases">Implementation Phases</a></li>
+  </ul>
+</aside>
+
+<!-- MAIN CONTENT -->
+<main class="main-content">
+
+<div class="breadcrumb"><a href="index.html">Home</a> / Design Document</div>
+
+<h1>RLAAS Design Document</h1>
+<p class="text-muted" style="font-size:1rem;margin-bottom:2.5rem;">Version 1.0 &mdash; Golang-first, hybrid deployment, multi-tenant, extensible</p>
+
+<!-- ─── Executive Summary ─── -->
+<section id="executive-summary">
+<h2>1. Executive Summary</h2>
+<p>
+  This document defines the architecture for <strong>RLAAS</strong> (Rate Limiting as a Service) — a platform designed for broad applicability across HTTP APIs, gRPC services, OTEL signals, event streams, background jobs, external integrations, authentication flows, and custom business operations.
+</p>
+<p>The recommended model is a <strong>hybrid architecture</strong>:</p>
+<ol>
+  <li><strong>Embedded SDK/library mode</strong> for low-latency local decisions.</li>
+  <li><strong>Centralized control plane</strong> for policy management, auditing, rollout, governance, and analytics.</li>
+  <li><strong>Optional centralized decision service</strong> for non-Go clients or service-to-service integration.</li>
+  <li><strong>Optional sidecar/agent mode</strong> for Kubernetes and polyglot environments.</li>
+</ol>
+
+<blockquote>Treat rate limiting as a generic policy decision engine, not as a DB-specific algorithm runner.</blockquote>
+</section>
+
+<!-- ─── Goals ─── -->
+<section id="goals">
+<h2>2. Goals</h2>
+
+<h3>Functional Goals</h3>
+<ul>
+  <li>Support rate limiting for <strong>any signal or workload type</strong></li>
+  <li>Support per-tenant, per-org, per-application, per-service, per-user, per-endpoint, and custom dimension-based policies</li>
+  <li>Support 7 algorithms: fixed window, sliding window (log &amp; counter), token bucket, leaky bucket, concurrency limiter, quota/budget limiter</li>
+  <li>Support 8 action types: allow, deny, delay, sample, drop, downgrade, drop-low-priority, shadow-only</li>
+  <li>Support multiple integration modes: Go library, gRPC, HTTP, sidecar, middleware, OTEL processors</li>
+  <li>Support policy persistence in PostgreSQL, Oracle, file-based stores</li>
+  <li>Support hot-path counters in: in-memory (sharded), Redis, optional DB-backed low-volume mode</li>
+  <li>Support multi-tenant policy separation and override hierarchy</li>
+</ul>
+
+<h3>Non-Functional Goals</h3>
+<ul>
+  <li>Low latency for hot-path decisions (sub-millisecond local, low-ms distributed)</li>
+  <li>High concurrency support with lock-sharded counters</li>
+  <li>Horizontally scalable control plane and decision plane</li>
+  <li>Pluggable, testable, interface-driven design</li>
+  <li>Safe rollout with shadow mode and progressive enforcement</li>
+  <li>Observable, auditable, and production-friendly</li>
+</ul>
+
+<h3>Non-Goals (v1)</h3>
+<ul>
+  <li>Full UI implementation</li>
+  <li>Billing engine</li>
+  <li>Cross-region strong consistency for all counters</li>
+  <li>ML-based adaptive throttling</li>
+  <li>Distributed consensus-based exact limit enforcement across all regions</li>
+</ul>
+</section>
+
+<!-- ─── Architecture ─── -->
+<section id="architecture">
+<h2>3. High-Level Architecture</h2>
+<p>The platform has four major planes/components:</p>
+
+<div class="info-cards">
+  <div class="info-card">
+    <h4>Embedded Data Plane (SDK)</h4>
+    <p>Load &amp; cache policies, build evaluation context, match policies, execute algorithm, query/update counter backend, return decision, expose middleware.</p>
+  </div>
+  <div class="info-card">
+    <h4>Central Control Plane</h4>
+    <p>Policy CRUD, tenant management, audit history, versioning, rollouts/canaries/shadow mode, analytics metadata, publishing config changes.</p>
+  </div>
+  <div class="info-card">
+    <h4>Central Decision Service</h4>
+    <p>Expose gRPC/HTTP APIs for rate-limit checks. Execute the same policy engine logic as SDK mode. Share reusable engine packages.</p>
+  </div>
+  <div class="info-card">
+    <h4>Sidecar / Agent Mode</h4>
+    <p>Provide local endpoint for app containers. Cache policies locally. Reduce remote decision latency. Bridge between app and centralized services.</p>
+  </div>
+</div>
+
+<div class="arch-diagram">
+┌─────────────────────────────────────────────────────────────────────┐
+│                            Clients                                  │
+│   Go SDK  │  HTTP Service  │  gRPC Service  │  Sidecar Agent       │
+└─────┬─────┴───────┬────────┴───────┬─────────┴──────┬──────────────┘
+      │             │                │                │
+      ▼             ▼                ▼                ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                      Shared Policy Engine                           │
+│                                                                     │
+│   RequestContext → Matcher → Algorithm → Decision → Analytics       │
+│                                                                     │
+│   ┌──────────────────┐          ┌──────────────────┐                │
+│   │  Counter Stores   │          │  Policy Stores    │                │
+│   │  ├─ Memory (sharded)│        │  ├─ File (JSON)   │                │
+│   │  ├─ Redis         │          │  ├─ PostgreSQL    │                │
+│   │  └─ DB (low vol)  │          │  └─ Oracle        │                │
+│   └──────────────────┘          └──────────────────┘                │
+└─────────────────────────────────────────────────────────────────────┘
+</div>
+</section>
+
+<!-- ─── Deployment Modes ─── -->
+<section id="deployment-modes">
+<h2>4. Deployment Modes</h2>
+
+<h3>Mode A — Embedded Go Library</h3>
+<p>Applications import the Go package and evaluate decisions locally. Best for internal Go ecosystem, OTEL collectors, latency-sensitive services. No network hop, fast hot path.</p>
+
+<h3>Mode B — Centralized Decision Service</h3>
+<p>Applications call a shared service over gRPC or HTTP. Best for polyglot environments, centralized governance, unified enforcement. Language agnostic, single version to manage.</p>
+
+<h3>Mode C — Sidecar / Local Agent</h3>
+<p>Applications call a local sidecar. Best for Kubernetes workloads, team-wide standardization, local caching with central governance.</p>
+
+<h3>Mode D — Hybrid (Recommended)</h3>
+<p>All three modes simultaneously. SDK for Go services, centralized service for non-Go apps, sidecar for K8s workloads. This is the recommended long-term approach.</p>
+</section>
+
+<!-- ─── Core Principles ─── -->
+<section id="principles">
+<h2>5. Core Architecture Principles</h2>
+<ol>
+  <li>Policy storage and counter storage must be <strong>separate concerns</strong></li>
+  <li>DB is suitable for policy persistence, <strong>not ideal as the primary hot-path counter store</strong></li>
+  <li>Counters should primarily live in <strong>memory or Redis</strong> for scale and latency</li>
+  <li>All rate limiting decisions must be driven by a <strong>canonical internal policy model</strong></li>
+  <li>Custom org tables should be handled through <strong>adapters</strong>, not baked into core logic</li>
+  <li>The engine must return a <strong>rich decision object</strong>, not only a boolean</li>
+  <li>Policy evaluation must support <strong>multiple dimensions and precedence rules</strong></li>
+  <li>Every policy should optionally operate in <strong>shadow mode</strong> before enforcement</li>
+  <li>Integration adapters should be <strong>first-class citizens</strong></li>
+  <li>Failure strategy must be <strong>explicit and configurable</strong></li>
+</ol>
+</section>
+
+<!-- ─── Use Cases ─── -->
+<section id="use-cases">
+<h2>6. Supported Use Cases</h2>
+
+<div class="info-cards">
+  <div class="info-card">
+    <h4>HTTP / REST Ingress</h4>
+    <p>Per IP, API key, org, endpoint, method, authenticated user, route group</p>
+  </div>
+  <div class="info-card">
+    <h4>gRPC</h4>
+    <p>Per method, service, tenant, client identity</p>
+  </div>
+  <div class="info-card">
+    <h4>HTTP / gRPC Egress</h4>
+    <p>Per partner API, destination, integration type, operation class — protect downstream</p>
+  </div>
+  <div class="info-card">
+    <h4>OpenTelemetry — Logs</h4>
+    <p>Per org, service, log level, environment, attribute set</p>
+  </div>
+  <div class="info-card">
+    <h4>OpenTelemetry — Traces</h4>
+    <p>Per service, span name, tenant, operation — drop noisy spans, sample selectively</p>
+  </div>
+  <div class="info-card">
+    <h4>Event / Messaging</h4>
+    <p>Per topic, consumer group, event type, tenant, producer/consumer</p>
+  </div>
+  <div class="info-card">
+    <h4>Background Jobs</h4>
+    <p>Per job type, org, workflow step, time window</p>
+  </div>
+  <div class="info-card">
+    <h4>Auth / Abuse Prevention</h4>
+    <p>Login attempts, OTP generation, password reset, device registration, email verification</p>
+  </div>
+  <div class="info-card">
+    <h4>Business Use Cases</h4>
+    <p>Invoice generation, report export, file upload/download, premium plan quotas, feature throttling</p>
+  </div>
+</div>
+</section>
+
+<!-- ─── Domain Model ─── -->
+<section id="domain-model">
+<h2>7. Canonical Domain Model</h2>
+<p>All policy sources are normalized into a single internal model. The canonical types are:</p>
+
+<h3>RequestContext</h3>
+<p>The caller provides a generic context for evaluation, with 20+ fields including org, tenant, service, operation, endpoint, method, user, API key, region, tags, and more.</p>
+<pre><code>type RequestContext struct {
+    RequestID      string
+    OrgID          string
+    TenantID       string
+    Application    string
+    Service        string
+    Environment    string
+    SignalType     string  // http, grpc, log, trace, span, event, auth, job, custom
+    Operation      string
+    Endpoint       string
+    Method         string
+    UserID         string
+    APIKey         string
+    ClientID       string
+    SourceIP       string
+    Region         string
+    Resource       string
+    Severity       string
+    SpanName       string
+    Topic          string
+    ConsumerGroup  string
+    JobType        string
+    Quantity       int64
+    Priority       string
+    Timestamp      time.Time
+    Tags           map[string]string
+    Attributes     map[string]string
+}</code></pre>
+
+<h3>Decision</h3>
+<p>The engine returns a rich decision object — not just a boolean.</p>
+<pre><code>type Decision struct {
+    Allowed          bool
+    Action           ActionType    // allow, deny, delay, sample, drop, ...
+    Reason           string
+    MatchedPolicyID  string
+    Remaining        int64
+    RetryAfter       time.Duration
+    DelayFor         time.Duration
+    SampleRate       float64
+    ShadowMode       bool
+    Metadata         map[string]string
+}</code></pre>
+
+<h3>Policy</h3>
+<p>Policies contain scope matching, algorithm configuration, action, failure mode, enforcement mode, rollout percentage, validity windows, and metadata.</p>
+<pre><code>type Policy struct {
+    PolicyID          string
+    Name              string
+    Enabled           bool
+    Priority          int
+    Scope             PolicyScope
+    Algorithm         AlgorithmConfig
+    Action            ActionType
+    FailureMode       FailureMode      // fail_open, fail_closed
+    EnforcementMode   EnforcementMode  // enforce, shadow
+    RolloutPercent    int
+    ValidFromUnix     int64
+    ValidToUnix       int64
+    Metadata          map[string]string
+}</code></pre>
+</section>
+
+<!-- ─── Algorithms ─── -->
+<section id="algorithms">
+<h2>8. Algorithms in Depth</h2>
+
+<h3>Fixed Window</h3>
+<p>Count requests within a fixed interval (e.g., 100 req/min). Simple, cheap, easy to understand. Cons: burst issue at window boundaries. Best for org-wide basic limits.</p>
+
+<h3>Sliding Window Log</h3>
+<p>Store timestamps of all events and count within the rolling window. Very accurate but memory-heavy. Best for security-sensitive exact checks, lower-volume workflows.</p>
+
+<h3>Sliding Window Counter</h3>
+<p>Approximate rolling window using sub-buckets and interpolation. Better scalability than log, better fairness than fixed. Best for APIs, OTEL signals, distributed workloads.</p>
+
+<h3>Token Bucket</h3>
+<p>Tokens refill over time; each request consumes tokens. Supports bursts well, industry standard for APIs. Best for REST/gRPC throttling, downstream API protection.</p>
+
+<h3>Leaky Bucket</h3>
+<p>Queue requests into a bucket drained at steady rate. Smooth shaping, good for egress control. Best for smoothing event bursts, outbound traffic.</p>
+
+<h3>Concurrency Limiter</h3>
+<p>Limit simultaneously in-flight operations. Requires acquire/release lifecycle. Best for DB-heavy operations, file processing, outbound dependency control.</p>
+
+<h3>Quota / Budget Limiter</h3>
+<p>Long-window budget (per-day, per-month). Useful for SaaS plan enforcement, telemetry budgets (logs/day, traces/day, API calls/month).</p>
+
+<div class="callout callout-info">
+  <strong>All Behind One Interface</strong>
+  Every algorithm implements the same <code>Evaluator</code> interface, making it easy to swap or test algorithms independently.
+</div>
+</section>
+
+<!-- ─── Actions ─── -->
+<section id="actions">
+<h2>9. Supported Actions</h2>
+<div class="tag-group">
+  <span class="tag tag-green">Allow</span>
+  <span class="tag tag-red">Deny</span>
+  <span class="tag tag-amber">Delay</span>
+  <span class="tag tag-blue">Sample</span>
+  <span class="tag tag-red">Drop</span>
+  <span class="tag tag-purple">Downgrade</span>
+  <span class="tag tag-gray">Drop Low Priority</span>
+  <span class="tag tag-purple">Shadow Only</span>
+</div>
+
+<table>
+  <thead><tr><th>Action</th><th>Behavior</th><th>Example Use</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Allow</strong></td><td>Request passes without modification</td><td>Normal flow</td></tr>
+    <tr><td><strong>Deny</strong></td><td>Reject entirely (HTTP 429, gRPC RESOURCE_EXHAUSTED)</td><td>Rate exceeded</td></tr>
+    <tr><td><strong>Delay</strong></td><td>Allow after waiting</td><td>Egress calls, background jobs</td></tr>
+    <tr><td><strong>Sample</strong></td><td>Allow only a fraction</td><td>Keep 10% of debug logs</td></tr>
+    <tr><td><strong>Drop</strong></td><td>Discard without processing</td><td>Low-value debug telemetry</td></tr>
+    <tr><td><strong>Downgrade</strong></td><td>Reduce priority/transform handling</td><td>Standard pipeline instead of premium</td></tr>
+    <tr><td><strong>Drop Low Priority</strong></td><td>Preserve high-value, drop low-value</td><td>Mixed-priority event streams</td></tr>
+    <tr><td><strong>Shadow Only</strong></td><td>Record decision, do not enforce</td><td>Pre-rollout validation</td></tr>
+  </tbody>
+</table>
+</section>
+
+<!-- ─── Counter Storage ─── -->
+<section id="counter-storage">
+<h2>10. Counter Storage Strategy</h2>
+
+<div class="callout callout-warning">
+  <strong>Key Design Decision</strong>
+  Use databases for policy/config persistence, not as the primary high-volume counter storage. Counters belong in fast stores.
+</div>
+
+<div class="info-cards">
+  <div class="info-card">
+    <h4>In-Memory (Sharded)</h4>
+    <p>Fastest option. 64 lock shards by default, FNV32a hash for shard selection. ~6 ns/op for multi-key contention. Best for local library mode, single-instance services, fallback.</p>
+  </div>
+  <div class="info-card">
+    <h4>Redis</h4>
+    <p>Distributed limits, shared counters, high throughput. Atomic ops, TTL support, Lua scripts. Best for multi-node deployments.</p>
+  </div>
+  <div class="info-card">
+    <h4>Database (Low Volume)</h4>
+    <p>Optional PostgreSQL/Oracle counter mode for low-QPS, compliance-driven persistence. Higher latency, poor fit for hot path.</p>
+  </div>
+</div>
+
+<h3>Counter Store Interface</h3>
+<pre><code>type CounterStore interface {
+    Increment(ctx context.Context, key string, value int64, ttl time.Duration) (int64, error)
+    Get(ctx context.Context, key string) (int64, error)
+    Set(ctx context.Context, key string, value int64, ttl time.Duration) error
+    CompareAndSwap(ctx context.Context, key string, old, new int64, ttl time.Duration) (bool, error)
+    Delete(ctx context.Context, key string) error
+    AddTimestamp(ctx context.Context, key string, ts time.Time, ttl time.Duration) error
+    CountAfter(ctx context.Context, key string, after time.Time) (int64, error)
+    TrimBefore(ctx context.Context, key string, before time.Time) error
+    AcquireLease(ctx context.Context, key string, limit int64, ttl time.Duration) (bool, int64, error)
+    ReleaseLease(ctx context.Context, key string) error
+}</code></pre>
+</section>
+
+<!-- ─── Policy Storage ─── -->
+<section id="policy-storage">
+<h2>11. Policy Storage Strategy</h2>
+<p>Supported policy backends: PostgreSQL, Oracle, file/JSON (local/dev), and custom adapters for legacy enterprise sources.</p>
+
+<pre><code>type PolicyStore interface {
+    LoadPolicies(ctx context.Context, tenantOrOrg string) ([]model.Policy, error)
+    GetPolicyByID(ctx context.Context, policyID string) (*model.Policy, error)
+    UpsertPolicy(ctx context.Context, p model.Policy) error
+    DeletePolicy(ctx context.Context, policyID string) error
+    ListPolicies(ctx context.Context, filter map[string]string) ([]model.Policy, error)
+}</code></pre>
+
+<p>Legacy or custom org-specific tables are supported through adapters that normalize data into the canonical <code>Policy</code> model — the core engine never couples directly to external schemas.</p>
+</section>
+
+<!-- ─── Failure Behavior ─── -->
+<section id="failure-behavior">
+<h2>12. Failure Behavior</h2>
+<div class="info-cards">
+  <div class="info-card">
+    <h4>Fail Open</h4>
+    <p>Allow traffic when backend is unavailable. Best for logs, traces, non-critical metrics, non-security paths.</p>
+  </div>
+  <div class="info-card">
+    <h4>Fail Closed</h4>
+    <p>Deny when backend is unavailable. Best for abuse prevention, OTP generation, login throttling, external partner quotas.</p>
+  </div>
+  <div class="info-card">
+    <h4>Fail Degrade</h4>
+    <p>Apply fallback local limits or downgrade action. Best for large distributed systems, best-effort high availability.</p>
+  </div>
+</div>
+</section>
+
+<!-- ─── Shadow & Rollout ─── -->
+<section id="shadow-rollout">
+<h2>13. Shadow Mode &amp; Safe Rollout</h2>
+<p>Every policy supports shadow mode — evaluate exactly as enforcement would, record the decision, but don't block/delay/drop.</p>
+
+<h3>Rollout Percentage</h3>
+<ul>
+  <li><strong>0%</strong> — disabled</li>
+  <li><strong>10%</strong> — apply to 10% of matching requests</li>
+  <li><strong>100%</strong> — fully active</li>
+</ul>
+
+<h3>Recommended Rollout Flow</h3>
+<ol>
+  <li>Create policy in shadow mode</li>
+  <li>Validate metrics and hypothetical deny/drop rate</li>
+  <li>Enable partial rollout (e.g. 10%)</li>
+  <li>Gradually increase to full enforcement</li>
+</ol>
+</section>
+
+<!-- ─── Multi-Tenancy ─── -->
+<section id="multi-tenancy">
+<h2>14. Multi-Tenancy Model</h2>
+<p>Policies are scoped to org, tenant, application, and service. The override hierarchy from least to most specific:</p>
+<ol>
+  <li>Global defaults</li>
+  <li>Org defaults</li>
+  <li>Tenant-specific policies</li>
+  <li>Application policies</li>
+  <li>Service policies</li>
+  <li>Endpoint / operation policies</li>
+  <li>User / client overrides</li>
+</ol>
+
+<p>All counter keys are namespaced to prevent collisions:</p>
+<pre><code>rlaas:{org}:{tenant}:{signal}:{service}:{operation}:{dimension_hash}</code></pre>
+</section>
+
+<!-- ─── Caching ─── -->
+<section id="caching">
+<h2>15. Caching Strategy</h2>
+<ul>
+  <li><strong>Policy Cache:</strong> Every SDK/agent/service caches policies locally with TTL-based refresh and on-demand invalidation via pub/sub.</li>
+  <li><strong>Decision Cache (optional):</strong> Cache deterministic allow decisions for ultra-short duration where safe.</li>
+  <li><strong>Counter Local Cache:</strong> Suitable for local rate limiting, best-effort approximations, and resilience fallback.</li>
+</ul>
+</section>
+
+<!-- ─── Matching ─── -->
+<section id="matching">
+<h2>16. Policy Matching Strategy</h2>
+<p>A request can match multiple policies. The engine determines the winner using precedence:</p>
+<ol>
+  <li>User-level override</li>
+  <li>API key / client override</li>
+  <li>Endpoint + method</li>
+  <li>Operation</li>
+  <li>Service</li>
+  <li>Application</li>
+  <li>Tenant</li>
+  <li>Org</li>
+  <li>Signal type</li>
+  <li>Global default</li>
+</ol>
+
+<h3>Tie Breakers</h3>
+<ol>
+  <li>Higher priority wins</li>
+  <li>Narrower scope wins</li>
+  <li>Newest policy version wins</li>
+  <li>Deterministic final tie-break using policy ID</li>
+</ol>
+
+<h3>Advanced Match Expressions</h3>
+<p>Policies support <code>match_expr</code> in metadata for compound conditions:</p>
+<pre><code>match_expr: "region==us-east-1 && tag.env==production && method!=DELETE"</code></pre>
+</section>
+
+<!-- ─── Key Construction ─── -->
+<section id="key-construction">
+<h2>17. Key Construction</h2>
+<p>A standardized key builder creates deterministic, namespaced counter keys:</p>
+<pre><code>rlaas:org=acme:tenant=retail:signal=http:service=payments:endpoint=/v1/charge:method=POST:user=123</code></pre>
+<p>Rules: deterministic, stable ordering, namespaced, include only matched scope dimensions, hash large tag maps, safe for Redis and logs.</p>
+</section>
+
+<!-- ─── Integrations ─── -->
+<section id="integrations">
+<h2>18. Integration Adapters</h2>
+<div class="info-cards">
+  <div class="info-card">
+    <h4>HTTP Middleware</h4>
+    <p>For net/http, Echo, Gin, Fiber, Chi. Build RequestContext, evaluate, return 429 on deny.</p>
+  </div>
+  <div class="info-card">
+    <h4>gRPC Interceptor</h4>
+    <p>Unary and streaming interceptors for transparent rate-limit enforcement.</p>
+  </div>
+  <div class="info-card">
+    <h4>OTEL Processors</h4>
+    <p>Log and span batch processing with worker pools e.g. drop/sample noisy spans.</p>
+  </div>
+  <div class="info-card">
+    <h4>Message Consumer Wrapper</h4>
+    <p>For Kafka, Pub/Sub, SQS, NATS — per-topic, per-consumer-group limiting.</p>
+  </div>
+  <div class="info-card">
+    <h4>Generic Business API</h4>
+    <p>Direct evaluator interface for custom workflows: invoice gen, report export, file upload.</p>
+  </div>
+</div>
+</section>
+
+<!-- ─── Observability ─── -->
+<section id="observability">
+<h2>19. Observability</h2>
+<h3>Metrics</h3>
+<div class="tag-group">
+  <span class="tag tag-gray">decisions_total</span>
+  <span class="tag tag-green">decisions_allowed_total</span>
+  <span class="tag tag-red">decisions_denied_total</span>
+  <span class="tag tag-purple">decisions_shadow_total</span>
+  <span class="tag tag-blue">algorithm_latency_ms</span>
+  <span class="tag tag-amber">counter_store_errors_total</span>
+  <span class="tag tag-gray">policy_cache_hit_total</span>
+  <span class="tag tag-gray">backend_fail_open_total</span>
+</div>
+
+<h3>Logging</h3>
+<p>Policy load failures, backend failures, shadow mode high-risk decisions, policy conflicts, invalid configurations.</p>
+
+<h3>Tracing</h3>
+<p>Policy fetch, match time, algorithm execution, Redis/DB round trips — all traceable.</p>
+</section>
+
+<!-- ─── Security ─── -->
+<section id="security">
+<h2>20. Security &amp; Governance</h2>
+<ul>
+  <li><strong>Multi-Tenant Safety:</strong> Every policy API enforces org/tenant scoping. No cross-tenant reads/writes.</li>
+  <li><strong>Admin RBAC:</strong> Platform admin, org admin, read-only auditor, developer/operator roles.</li>
+  <li><strong>Auditability:</strong> Every policy change is recorded in the audit trail.</li>
+  <li><strong>Secret Handling:</strong> DB creds via secret manager/env. Redis auth secured. TLS for production gRPC/HTTP.</li>
+</ul>
+</section>
+
+<!-- ─── Performance ─── -->
+<section id="performance">
+<h2>21. Performance Guidelines</h2>
+<h3>Hot Path Expectations</h3>
+<ul>
+  <li>SDK decisions target sub-millisecond to low-millisecond local</li>
+  <li>Sharded memory store: <strong>~6 ns/op</strong> for multi-key workloads (0 allocs)</li>
+  <li>Fixed window evaluation: ~1.6 &mu;s/op</li>
+  <li>HTTP check handler: ~10 &mu;s/op</li>
+</ul>
+
+<h3>Performance Optimizations Implemented</h3>
+<ul>
+  <li><strong>Lock-sharded counters:</strong> 64 shards with FNV32a hash, per-shard mutex</li>
+  <li><strong>Async invalidation:</strong> Bounded worker pool (up to 8 goroutines) with 256-item buffered queue</li>
+  <li><strong>Burst coalescing:</strong> Sidecar drains invalidation channel to avoid redundant syncs</li>
+  <li><strong>Zero-allocation hot path:</strong> No heap allocations in counter read/write operations</li>
+</ul>
+
+<h3>Consistency Trade-off</h3>
+<p>Exact local/regional limits where needed. Approximate global limits are acceptable in many cases. Per-policy consistency expectations should be documented.</p>
+</section>
+
+<!-- ─── Package Structure ─── -->
+<section id="package-structure">
+<h2>22. Package Structure</h2>
+<pre><code>rlaas/
+├── cmd/
+│   ├── rlaas-server/       # HTTP + gRPC server
+│   └── rlaas-agent/        # Sidecar proxy agent
+├── api/
+│   └── proto/              # Protobuf definitions
+├── internal/
+│   ├── model/              # Canonical domain types
+│   ├── engine/
+│   │   ├── matcher/        # Policy matching + match_expr
+│   │   ├── evaluator/      # Main evaluation engine
+│   │   ├── rollout/        # Rollout percentage logic
+│   │   └── decision/       # Decision builder
+│   ├── algorithm/          # 7 algorithm implementations
+│   ├── store/
+│   │   ├── policy/         # File, PostgreSQL, Oracle stores
+│   │   └── counter/        # Memory (sharded), Redis, DB stores
+│   ├── adapter/
+│   │   ├── http/           # HTTP middleware
+│   │   ├── grpc/           # gRPC interceptor
+│   │   └── otel/           # OTEL processor primitives
+│   ├── region/             # Multi-region allocation
+│   ├── key/                # Counter key builder
+│   └── config/             # Configuration model
+├── pkg/rlaas/              # Public Go SDK
+├── sdk/
+│   ├── python/             # Python SDK
+│   ├── typescript/         # TypeScript SDK
+│   ├── java/               # Java SDK
+│   └── dotnet/             # .NET SDK
+├── benchmarks/             # Performance benchmark suite
+├── examples/               # Sample policies and configs
+└── docs/                   # This documentation site</code></pre>
+</section>
+
+<!-- ─── Implementation Phases ─── -->
+<section id="implementation-phases">
+<h2>23. Implementation Phases</h2>
+
+<h3>Phase 1 — MVP &#x2705;</h3>
+<ul>
+  <li>Go SDK/library with canonical policy model</li>
+  <li>Counter stores: in-memory (sharded) + Redis</li>
+  <li>Policy store: file-based JSON</li>
+  <li>Algorithms: fixed window, token bucket, sliding window counter, concurrency, quota</li>
+  <li>Actions: allow, deny, delay, sample, drop, shadow</li>
+  <li>HTTP middleware + gRPC interceptor</li>
+  <li>Decision + analytics endpoints</li>
+  <li>Policy CRUD + audit + versions + rollout + rollback</li>
+</ul>
+
+<h3>Phase 2 — Extended &#x2705;</h3>
+<ul>
+  <li>Centralized gRPC/HTTP decision service</li>
+  <li>Sidecar/agent mode with invalidation sync</li>
+  <li>OTEL processor primitives</li>
+  <li>Multi-region allocation primitives</li>
+  <li>Advanced match_expr support</li>
+  <li>Non-Go SDKs: Python, TypeScript, Java, .NET</li>
+  <li>Benchmark suite</li>
+  <li>Performance optimizations (sharded counters, async dispatch, burst coalescing)</li>
+</ul>
+
+<h3>Phase 3 — Enterprise (In Progress)</h3>
+<ul>
+  <li>PostgreSQL policy &amp; counter stores</li>
+  <li>Oracle policy &amp; counter stores</li>
+  <li>Admin/operator UX and policy governance workflows</li>
+  <li>Advanced analytics and dashboards</li>
+</ul>
+</section>
+
+<hr />
+<p class="text-muted text-center" style="margin-top:2rem;">End of Design Document &mdash; <a href="index.html">Back to Home</a></p>
+
+</main>
+</div>
+
+<!-- FOOTER -->
+<footer class="footer">
+  <div class="footer-inner">
+    <ul class="footer-links">
+      <li><a href="index.html">Home</a></li>
+      <li><a href="features.html">Features</a></li>
+      <li><a href="design.html">Design</a></li>
+      <li><a href="api.html">API</a></li>
+      <li><a href="sdks.html">SDKs</a></li>
+      <li><a href="getting-started.html">Get Started</a></li>
+    </ul>
+    <p>RLAAS — Rate Limiting As A Service &copy; 2024&ndash;2026</p>
+  </div>
+</footer>
+
+<button class="scroll-top" id="scrollTop" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Scroll to top">
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+</button>
+<script>
+window.addEventListener('scroll',()=>{
+  document.getElementById('scrollTop').classList.toggle('visible', window.scrollY > 400);
+});
+// highlight active sidebar link on scroll
+const sections = document.querySelectorAll('section[id]');
+const sidebarLinks = document.querySelectorAll('.sidebar a');
+const obs = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      sidebarLinks.forEach(l => l.classList.remove('active'));
+      const link = document.querySelector('.sidebar a[href="#' + e.target.id + '"]');
+      if (link) link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-80px 0px -60% 0px' });
+sections.forEach(s => obs.observe(s));
+</script>
+</body>
+</html>

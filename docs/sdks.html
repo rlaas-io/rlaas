@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SDKs — RLAAS</title>
+  <meta name="description" content="RLAAS client SDKs for Go, Python, TypeScript, Java, and .NET — integrate rate limiting in minutes." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Lora:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    .sdk-section { border: 1px solid var(--border-light); border-radius: var(--radius-lg); padding: 2.5rem; margin-bottom: 2rem; background: var(--bg); }
+    .sdk-section h3 { margin-top: 0; }
+    .sdk-lang { display: inline-block; padding: .3rem .8rem; border-radius: 6px; font-size: .8rem; font-weight: 600; margin-bottom: 1rem; }
+    .lang-go     { background: #e0f5f0; color: #00897b; }
+    .lang-python { background: #fff3cd; color: #856404; }
+    .lang-ts     { background: #cfe2ff; color: #084298; }
+    .lang-java   { background: #ffe0cc; color: #c35600; }
+    .lang-dotnet { background: #e8daef; color: #6c3483; }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav"><div class="nav-inner">
+  <a href="index.html" class="nav-logo">RLAAS<span>.</span></a>
+  <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+  </button>
+  <ul class="nav-links">
+    <li><a href="index.html">Home</a></li>
+    <li><a href="features.html">Features</a></li>
+    <li><a href="design.html">Design</a></li>
+    <li><a href="api.html">API</a></li>
+    <li><a href="sdks.html" class="active">SDKs</a></li>
+    <li><a href="getting-started.html">Get Started</a></li>
+  </ul>
+</div></nav>
+
+<!-- HERO -->
+<header class="hero" style="padding:4rem 2rem 3.5rem;">
+  <h1 style="font-size:2.5rem;">Client SDKs</h1>
+  <p class="subtitle">One native Go SDK plus four HTTP client libraries. Integrate RLAAS in minutes, regardless of your tech stack.</p>
+</header>
+
+<section class="content" style="max-width:880px;">
+
+<!-- OVERVIEW -->
+<h2>SDK Overview</h2>
+<p>Every SDK provides the same functionality:</p>
+<ul>
+  <li><strong>Decision:</strong> <code>check</code>, <code>acquire</code>, <code>release</code></li>
+  <li><strong>Policy CRUD:</strong> <code>list</code>, <code>get</code>, <code>create</code>, <code>update</code>, <code>delete</code></li>
+  <li><strong>Lifecycle:</strong> <code>validate</code>, <code>rollout</code>, <code>rollback</code></li>
+  <li><strong>History:</strong> <code>audit</code>, <code>versions</code></li>
+  <li><strong>Analytics:</strong> <code>summary</code></li>
+</ul>
+
+<table>
+  <thead><tr><th>SDK</th><th>Language</th><th>HTTP Library</th><th>Location</th></tr></thead>
+  <tbody>
+    <tr><td><span class="sdk-lang lang-go">Go</span></td><td>Go 1.22+</td><td>Native engine (embedded)</td><td><code>pkg/rlaas/</code></td></tr>
+    <tr><td><span class="sdk-lang lang-python">Python</span></td><td>Python 3.8+</td><td><code>requests</code></td><td><code>sdk/python/</code></td></tr>
+    <tr><td><span class="sdk-lang lang-ts">TypeScript</span></td><td>TypeScript / Node.js</td><td><code>fetch</code></td><td><code>sdk/typescript/</code></td></tr>
+    <tr><td><span class="sdk-lang lang-java">Java</span></td><td>Java 11+</td><td><code>java.net.http.HttpClient</code></td><td><code>sdk/java/</code></td></tr>
+    <tr><td><span class="sdk-lang lang-dotnet">.NET</span></td><td>.NET 8</td><td><code>HttpClient</code></td><td><code>sdk/dotnet/</code></td></tr>
+  </tbody>
+</table>
+
+<hr />
+
+<!-- ═══════════ GO ═══════════ -->
+<div class="sdk-section" id="go">
+  <span class="sdk-lang lang-go">Go</span>
+  <h3>Go SDK (Embedded)</h3>
+  <p>The Go SDK is the native library — import it and evaluate decisions locally with zero network overhead.</p>
+
+<pre><code>import "rlaas/pkg/rlaas"
+
+client := rlaas.NewClient()
+decision, err := client.Check(ctx, model.RequestContext{
+    OrgID:      "acme",
+    TenantID:   "retail",
+    SignalType: "http",
+    Operation:  "charge",
+    Endpoint:   "/v1/charge",
+    Method:     "POST",
+    UserID:     "u1",
+})
+
+if decision.Allowed {
+    // proceed
+} else {
+    // return 429 with decision.RetryAfter
+}</code></pre>
+
+  <p>For concurrency limiting:</p>
+<pre><code>decision, release, err := client.StartConcurrencyLease(ctx, req)
+if decision.Allowed {
+    defer release()
+    // do heavy work
+}</code></pre>
+</div>
+
+<!-- ═══════════ PYTHON ═══════════ -->
+<div class="sdk-section" id="python">
+  <span class="sdk-lang lang-python">Python</span>
+  <h3>Python SDK</h3>
+  <p>Install: <code>pip install rlaas-sdk</code> (or install from <code>sdk/python/</code>)</p>
+
+<pre><code>from rlaas_sdk import RlaasClient, CheckRequest
+
+client = RlaasClient("http://localhost:8080")
+
+# Check decision
+decision = client.check(CheckRequest(
+    request_id="r1",
+    org_id="acme",
+    tenant_id="retail",
+    signal_type="http",
+    operation="charge",
+    endpoint="/v1/charge",
+    method="POST",
+    user_id="u1"
+))
+
+print(f"Allowed: {decision.allowed}, Remaining: {decision.remaining}")
+
+# Create policy
+client.create_policy({
+    "policy_id": "test-limit",
+    "name": "Test Limit",
+    "enabled": True,
+    "scope": {"org_id": "acme", "signal_type": "http"},
+    "algorithm": {"type": "fixed_window", "limit": 100, "window": "1m"},
+    "action": "deny",
+    "rollout_percent": 100
+})
+
+# Get audit trail
+audit = client.get_audit("test-limit")
+
+# Analytics
+summary = client.get_analytics_summary(top=5)</code></pre>
+</div>
+
+<!-- ═══════════ TYPESCRIPT ═══════════ -->
+<div class="sdk-section" id="typescript">
+  <span class="sdk-lang lang-ts">TypeScript</span>
+  <h3>TypeScript SDK</h3>
+  <p>Install: <code>npm install rlaas-sdk</code> (or import from <code>sdk/typescript/</code>)</p>
+
+<pre><code>import { RlaasClient } from 'rlaas-sdk';
+
+const client = new RlaasClient('http://localhost:8080');
+
+// Check decision
+const decision = await client.check({
+  request_id: 'r1',
+  org_id: 'acme',
+  tenant_id: 'retail',
+  signal_type: 'http',
+  operation: 'charge',
+  endpoint: '/v1/charge',
+  method: 'POST',
+  user_id: 'u1',
+});
+
+console.log(`Allowed: ${decision.allowed}, Remaining: ${decision.remaining}`);
+
+// List policies
+const policies = await client.listPolicies();
+
+// Rollout update
+await client.rollout('payments-limit', 50);
+
+// Rollback
+await client.rollback('payments-limit', 1);</code></pre>
+</div>
+
+<!-- ═══════════ JAVA ═══════════ -->
+<div class="sdk-section" id="java">
+  <span class="sdk-lang lang-java">Java</span>
+  <h3>Java SDK</h3>
+  <p>Add dependency from <code>sdk/java/</code> (Maven, Java 11+).</p>
+
+<pre><code>import io.rlaas.sdk.RlaasClient;
+import io.rlaas.sdk.model.CheckRequest;
+import io.rlaas.sdk.model.Decision;
+
+RlaasClient client = new RlaasClient("http://localhost:8080");
+
+// Check decision
+CheckRequest req = new CheckRequest();
+req.setRequestId("r1");
+req.setOrgId("acme");
+req.setSignalType("http");
+req.setOperation("charge");
+req.setUserId("u1");
+
+Decision decision = client.check(req);
+System.out.println("Allowed: " + decision.isAllowed());
+System.out.println("Remaining: " + decision.getRemaining());
+
+// Create policy
+String policyJson = """
+  {
+    "policy_id": "java-limit",
+    "name": "Java Test",
+    "enabled": true,
+    "scope": {"org_id": "acme", "signal_type": "http"},
+    "algorithm": {"type": "token_bucket", "limit": 200, "window": "1m", "burst": 50},
+    "action": "deny",
+    "rollout_percent": 100
+  }
+  """;
+client.createPolicy(policyJson);</code></pre>
+</div>
+
+<!-- ═══════════ .NET ═══════════ -->
+<div class="sdk-section" id="dotnet">
+  <span class="sdk-lang lang-dotnet">.NET</span>
+  <h3>.NET SDK</h3>
+  <p>Add project reference from <code>sdk/dotnet/</code> (.NET 8).</p>
+
+<pre><code>using Rlaas.Sdk;
+
+var client = new RlaasClient("http://localhost:8080");
+
+// Check decision
+var decision = await client.CheckAsync(new CheckRequest
+{
+    RequestId  = "r1",
+    OrgId      = "acme",
+    TenantId   = "retail",
+    SignalType = "http",
+    Operation  = "charge",
+    Endpoint   = "/v1/charge",
+    Method     = "POST",
+    UserId     = "u1"
+});
+
+Console.WriteLine($"Allowed: {decision.Allowed}, Remaining: {decision.Remaining}");
+
+// Policy management
+var policies = await client.ListPoliciesAsync();
+await client.RolloutAsync("payments-limit", 50);
+await client.RollbackAsync("payments-limit", 1);
+
+// Analytics
+var summary = await client.GetAnalyticsSummaryAsync(top: 5);</code></pre>
+</div>
+
+<hr />
+
+<h2>Common Patterns</h2>
+
+<h3>Error Handling</h3>
+<p>All SDKs raise/throw on HTTP errors. Wrap calls in try/catch for production use:</p>
+
+<div class="code-tabs">
+  <div class="code-tab-bar">
+    <button class="code-tab-btn active" onclick="switchTab(event,'err-py')">Python</button>
+    <button class="code-tab-btn" onclick="switchTab(event,'err-ts')">TypeScript</button>
+    <button class="code-tab-btn" onclick="switchTab(event,'err-java')">Java</button>
+    <button class="code-tab-btn" onclick="switchTab(event,'err-net')">.NET</button>
+  </div>
+
+  <div id="err-py" class="code-tab-content active">
+<pre><code>try:
+    decision = client.check(req)
+except Exception as e:
+    # fail open: allow on error
+    print(f"RLAAS error: {e}, failing open")</code></pre>
+  </div>
+
+  <div id="err-ts" class="code-tab-content">
+<pre><code>try {
+  const d = await client.check(req);
+} catch (err) {
+  console.warn('RLAAS error, failing open:', err);
+}</code></pre>
+  </div>
+
+  <div id="err-java" class="code-tab-content">
+<pre><code>try {
+    Decision d = client.check(req);
+} catch (Exception e) {
+    System.err.println("RLAAS error, failing open: " + e.getMessage());
+}</code></pre>
+  </div>
+
+  <div id="err-net" class="code-tab-content">
+<pre><code>try {
+    var d = await client.CheckAsync(req);
+} catch (Exception ex) {
+    Console.Error.WriteLine($"RLAAS error: {ex.Message}");
+}</code></pre>
+  </div>
+</div>
+
+<h3>Custom Base URL</h3>
+<p>All SDKs accept a base URL in the constructor. Point to your production RLAAS server or local sidecar:</p>
+<pre><code># Production
+client = RlaasClient("https://rlaas.internal.company.com")
+
+# Local sidecar
+client = RlaasClient("http://localhost:18080")</code></pre>
+
+</section>
+
+<!-- FOOTER -->
+<footer class="footer">
+  <div class="footer-inner">
+    <ul class="footer-links">
+      <li><a href="index.html">Home</a></li>
+      <li><a href="features.html">Features</a></li>
+      <li><a href="design.html">Design</a></li>
+      <li><a href="api.html">API</a></li>
+      <li><a href="sdks.html">SDKs</a></li>
+      <li><a href="getting-started.html">Get Started</a></li>
+    </ul>
+    <p>RLAAS — Rate Limiting As A Service &copy; 2024&ndash;2026</p>
+  </div>
+</footer>
+
+<button class="scroll-top" id="scrollTop" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Scroll to top">
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+</button>
+<script>
+window.addEventListener('scroll',()=>{document.getElementById('scrollTop').classList.toggle('visible',window.scrollY>400);});
+
+function switchTab(event, tabId) {
+  const bar = event.target.closest('.code-tabs');
+  bar.querySelectorAll('.code-tab-btn').forEach(b => b.classList.remove('active'));
+  bar.querySelectorAll('.code-tab-content').forEach(c => c.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById(tabId).classList.add('active');
+}
+</script>
+</body>
+</html>
