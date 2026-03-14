@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RLAAS — Rate Limiting As A Service</title>
+  <meta name="description" content="RLAAS is a policy-driven platform for rate limiting, quotas, and traffic control across APIs and service workloads. Supports fixed window, token bucket, sliding window, concurrency limiting, and more." />
+  <meta name="keywords" content="rate limiting, API rate limit, traffic control, quota management, token bucket, sliding window, concurrency limiter, Go, gRPC, microservices" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Lora:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<!-- ═══════════════════════════ NAV ═══════════════════════════ -->
+<nav class="nav" id="nav">
+  <div class="nav-inner">
+    <a href="index.html" class="nav-logo">RLAAS<span>.</span></a>
+    <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <ul class="nav-links">
+      <li><a href="index.html" class="active">Home</a></li>
+      <li><a href="features.html">Features</a></li>
+      <li><a href="design.html">Design</a></li>
+      <li><a href="api.html">API</a></li>
+      <li><a href="sdks.html">SDKs</a></li>
+      <li><a href="getting-started.html">Get Started</a></li>
+    </ul>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════ HERO ═══════════════════════════ -->
+<header class="hero">
+  <h1>Rate Limiting As A Service</h1>
+  <p class="subtitle">
+    A policy-driven platform for enforcing limits, quotas, and traffic control across APIs and service workloads — built in Go for speed, designed for any stack.
+  </p>
+  <div class="hero-badges">
+    <span class="hero-badge">Fixed Window</span>
+    <span class="hero-badge">Token Bucket</span>
+    <span class="hero-badge">Sliding Window</span>
+    <span class="hero-badge">Concurrency Limiter</span>
+    <span class="hero-badge">Quota / Budget</span>
+    <span class="hero-badge">Shadow Mode</span>
+    <span class="hero-badge">Multi-Tenant</span>
+  </div>
+  <div class="hero-cta">
+    <a href="getting-started.html" class="btn btn-primary">Get Started</a>
+    <a href="design.html" class="btn btn-outline">Read the Design</a>
+  </div>
+</header>
+
+<!-- ═══════════════════════════ DEPLOYMENT MODELS ═══════════════════════════ -->
+<section class="content-wide" style="padding-top:5rem;">
+  <div class="features-header">
+    <h2 style="margin-top:0;">Three Deployment Models, One Engine</h2>
+    <p>Whether you embed, centralize, or sidecar — the same policy engine powers every decision.</p>
+  </div>
+
+  <div class="info-cards">
+    <div class="info-card">
+      <h4>&#x1F4E6; Embedded Go SDK</h4>
+      <p>Import as a library. Sub-millisecond local decisions. No network hop. Perfect for Go services.</p>
+    </div>
+    <div class="info-card">
+      <h4>&#x1F310; Centralized HTTP / gRPC</h4>
+      <p>Language-agnostic decision service. Centralized governance, unified telemetry, one version to manage.</p>
+    </div>
+    <div class="info-card">
+      <h4>&#x2699;&#xFE0F; Sidecar Local Proxy</h4>
+      <p>Run alongside your app in Kubernetes. Local latency, central governance. Best of both worlds.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════ FEATURES GRID ═══════════════════════════ -->
+<section class="features-section">
+  <div class="features-header">
+    <h2>Built for Real Workloads</h2>
+    <p>Everything you need to protect APIs, control telemetry, manage quotas, and enforce traffic policy at scale.</p>
+  </div>
+
+  <div class="features-grid">
+    <div class="feature-card">
+      <div class="feature-icon">&#x26A1;</div>
+      <h3>Seven Algorithms</h3>
+      <p>Fixed window, sliding window (log &amp; counter), token bucket, leaky bucket, concurrency limiter, and quota/budget limiter — all behind a single interface.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">&#x1F6E1;&#xFE0F;</div>
+      <h3>Rich Action Model</h3>
+      <p>Go beyond allow/deny. Support delay, sample, drop, downgrade, drop-low-priority, and shadow-only actions per policy.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">&#x1F3AF;</div>
+      <h3>Fine-Grained Matching</h3>
+      <p>Match on 20+ dimensions: org, tenant, service, endpoint, method, user, API key, region, tags, and more. Advanced <code>match_expr</code> expressions supported.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">&#x1F504;</div>
+      <h3>Safe Rollout</h3>
+      <p>Shadow mode for dry-run evaluation. Gradual rollout percentages. Version history with one-click rollback.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">&#x1F4CA;</div>
+      <h3>Analytics &amp; Audit</h3>
+      <p>Built-in analytics summary with tag aggregation. Full audit trail and version history for every policy change.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">&#x1F512;</div>
+      <h3>Fail-Safe by Design</h3>
+      <p>Configure fail-open or fail-closed per policy. Graceful degradation when backends are unavailable.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">&#x1F680;</div>
+      <h3>High Performance</h3>
+      <p>Lock-sharded in-memory counters (~6 ns/op). Async invalidation with bounded workers. Burst coalescing in sidecar sync.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">&#x1F30D;</div>
+      <h3>Multi-Region Ready</h3>
+      <p>Weighted regional allocation primitives. Overflow detection across regions. Built for global deployments.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">&#x1F4E1;</div>
+      <h3>OTEL Integration</h3>
+      <p>Processor primitives for batch log and span filtering. Worker pools with fail-open/closed. Control telemetry volume per policy.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════ ARCHITECTURE ═══════════════════════════ -->
+<section class="content">
+  <h2>Architecture at a Glance</h2>
+  <p>RLAAS separates policy storage from counter storage and uses a canonical internal model so every deployment mode shares the same evaluation engine.</p>
+
+  <div class="arch-diagram">
+┌─────────────────────────────────────────────────────────────────┐
+│                         Clients                                 │
+│   Go SDK  │  HTTP/gRPC  │  Python  │  TypeScript  │  Java/.NET │
+└─────┬─────┴──────┬──────┴─────┬────┴──────┬───────┴────┬───────┘
+      │            │            │           │            │
+      ▼            ▼            ▼           ▼            ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    RLAAS Decision Engine                         │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌────────────────┐  │
+│  │  Matcher  │→ │Algorithm │→ │ Decision │→ │  Analytics /    │  │
+│  │  (scope   │  │(fixed,   │  │ Builder  │  │  Audit Logger  │  │
+│  │  + expr)  │  │ token,.. │  │          │  │                │  │
+│  └──────────┘  └──────────┘  └──────────┘  └────────────────┘  │
+│                       │                                         │
+│           ┌───────────┴──────────┐                              │
+│           ▼                      ▼                              │
+│    ┌─────────────┐       ┌─────────────┐                        │
+│    │Counter Store│       │Policy Store  │                        │
+│    │ Memory/Redis│       │ File/PG/ORA  │                        │
+│    └─────────────┘       └─────────────┘                        │
+└─────────────────────────────────────────────────────────────────┘
+  </div>
+
+  <div class="callout callout-tip">
+    <strong>Design Principle</strong>
+    Treat rate limiting as a generic policy decision engine, not as a database-specific algorithm runner. Policies in the database, counters in fast stores.
+  </div>
+</section>
+
+<!-- ═══════════════════════════ USE CASES ═══════════════════════════ -->
+<section class="features-section">
+  <div class="features-header">
+    <h2>Works Across Every Signal Type</h2>
+    <p>From HTTP ingress to background jobs — one platform covers all your rate limiting needs.</p>
+  </div>
+
+  <div class="features-grid">
+    <div class="feature-card">
+      <div class="feature-icon">&#x1F310;</div>
+      <h3>HTTP / REST APIs</h3>
+      <p>Per-IP, per-API-key, per-user, per-endpoint, per-org throttling for any REST service.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">&#x1F4E8;</div>
+      <h3>gRPC Services</h3>
+      <p>Per-method, per-service, per-tenant concurrency &amp; rate limiting via interceptors.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">&#x1F4CB;</div>
+      <h3>OpenTelemetry Signals</h3>
+      <p>Control log/span/trace volume per org, service, severity, or attribute set.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">&#x1F4E9;</div>
+      <h3>Event &amp; Messaging</h3>
+      <p>Per-topic, per-consumer-group, per-event-type limits for Kafka, Pub/Sub, SQS, NATS.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">&#x1F527;</div>
+      <h3>Background Jobs</h3>
+      <p>Per-job-type, per-org, per-workflow-step throttling for batch and async workloads.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">&#x1F6AA;</div>
+      <h3>Auth &amp; Abuse Prevention</h3>
+      <p>Login attempts, OTP generation, password resets, device registration — protect every auth flow.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════ ALGORITHMS ═══════════════════════════ -->
+<section class="content">
+  <h2>Supported Algorithms</h2>
+  <p>Choose the right algorithm for each use case, or let the policy engine decide.</p>
+
+  <div class="tag-group">
+    <span class="tag tag-blue">Fixed Window</span>
+    <span class="tag tag-blue">Sliding Window Log</span>
+    <span class="tag tag-blue">Sliding Window Counter</span>
+    <span class="tag tag-green">Token Bucket</span>
+    <span class="tag tag-green">Leaky Bucket</span>
+    <span class="tag tag-purple">Concurrency Limiter</span>
+    <span class="tag tag-amber">Quota / Budget</span>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>Algorithm</th><th>Best For</th><th>Trade-off</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>Fixed Window</strong></td><td>Simple org-wide limits, low-complexity quotas</td><td>Boundary burst possible</td></tr>
+      <tr><td><strong>Sliding Window Log</strong></td><td>Security-sensitive exact checks, low-volume</td><td>Higher memory cost</td></tr>
+      <tr><td><strong>Sliding Window Counter</strong></td><td>APIs, OTEL signals, general distributed loads</td><td>Approximation complexity</td></tr>
+      <tr><td><strong>Token Bucket</strong></td><td>REST/gRPC throttling, burst control</td><td>Refill math &amp; atomicity</td></tr>
+      <tr><td><strong>Leaky Bucket</strong></td><td>Egress smoothing, outbound traffic shaping</td><td>Less intuitive</td></tr>
+      <tr><td><strong>Concurrency Limiter</strong></td><td>DB-heavy ops, file processing, dependency protection</td><td>Requires acquire/release lifecycle</td></tr>
+      <tr><td><strong>Quota / Budget</strong></td><td>SaaS plan enforcement, daily/monthly budgets</td><td>Not for short-burst protection alone</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ═══════════════════════════ SDK PREVIEW ═══════════════════════════ -->
+<section class="features-section">
+  <div class="features-header">
+    <h2>Client SDKs for Every Stack</h2>
+    <p>Native Go plus four HTTP client SDKs — integrate in minutes.</p>
+  </div>
+
+  <div class="info-cards" style="max-width:var(--wide-width);margin:0 auto;">
+    <div class="info-card">
+      <h4>Go (Native)</h4>
+      <p>Embedded library with direct engine access. Sub-millisecond decisions, zero network hop.</p>
+    </div>
+    <div class="info-card">
+      <h4>Python</h4>
+      <p>Lightweight <code>requests</code>-based client. Full API coverage including analytics and audit.</p>
+    </div>
+    <div class="info-card">
+      <h4>TypeScript</h4>
+      <p>Modern <code>fetch</code>-based client. Type-safe interfaces. Works in Node.js and edge runtimes.</p>
+    </div>
+    <div class="info-card">
+      <h4>Java</h4>
+      <p><code>java.net.http.HttpClient</code> with Jackson. Java 11+ compatible. Full CRUD support.</p>
+    </div>
+    <div class="info-card">
+      <h4>.NET</h4>
+      <p><code>HttpClient</code> with <code>System.Text.Json</code>. Async/await, CancellationToken. .NET 8 ready.</p>
+    </div>
+  </div>
+
+  <p class="text-center" style="margin-top:2rem;">
+    <a href="sdks.html" class="btn btn-primary">View SDK Documentation →</a>
+  </p>
+</section>
+
+<!-- ═══════════════════════════ API QUICK REF ═══════════════════════════ -->
+<section class="content">
+  <h2>API at a Glance</h2>
+  <p>Simple, RESTful endpoints. One <code>POST /v1/check</code> call to get a rate-limit decision.</p>
+
+  <div class="endpoint-table">
+    <table>
+      <thead>
+        <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="endpoint-method method-post">POST</span></td>
+          <td class="endpoint-path">/v1/check</td>
+          <td>Evaluate a rate-limit decision</td>
+        </tr>
+        <tr>
+          <td><span class="endpoint-method method-post">POST</span></td>
+          <td class="endpoint-path">/v1/acquire</td>
+          <td>Acquire a concurrency lease</td>
+        </tr>
+        <tr>
+          <td><span class="endpoint-method method-post">POST</span></td>
+          <td class="endpoint-path">/v1/release</td>
+          <td>Release a concurrency lease</td>
+        </tr>
+        <tr>
+          <td><span class="endpoint-method method-get">GET</span></td>
+          <td class="endpoint-path">/v1/policies</td>
+          <td>List all policies</td>
+        </tr>
+        <tr>
+          <td><span class="endpoint-method method-post">POST</span></td>
+          <td class="endpoint-path">/v1/policies</td>
+          <td>Create a new policy</td>
+        </tr>
+        <tr>
+          <td><span class="endpoint-method method-get">GET</span></td>
+          <td class="endpoint-path">/v1/policies/{id}</td>
+          <td>Get a specific policy</td>
+        </tr>
+        <tr>
+          <td><span class="endpoint-method method-put">PUT</span></td>
+          <td class="endpoint-path">/v1/policies/{id}</td>
+          <td>Update a policy</td>
+        </tr>
+        <tr>
+          <td><span class="endpoint-method method-delete">DELETE</span></td>
+          <td class="endpoint-path">/v1/policies/{id}</td>
+          <td>Delete a policy</td>
+        </tr>
+        <tr>
+          <td><span class="endpoint-method method-get">GET</span></td>
+          <td class="endpoint-path">/v1/policies/{id}/audit</td>
+          <td>Policy change audit trail</td>
+        </tr>
+        <tr>
+          <td><span class="endpoint-method method-get">GET</span></td>
+          <td class="endpoint-path">/v1/policies/{id}/versions</td>
+          <td>Policy version history</td>
+        </tr>
+        <tr>
+          <td><span class="endpoint-method method-post">POST</span></td>
+          <td class="endpoint-path">/v1/policies/{id}/rollout</td>
+          <td>Update rollout percentage</td>
+        </tr>
+        <tr>
+          <td><span class="endpoint-method method-post">POST</span></td>
+          <td class="endpoint-path">/v1/policies/{id}/rollback</td>
+          <td>Rollback to a previous version</td>
+        </tr>
+        <tr>
+          <td><span class="endpoint-method method-post">POST</span></td>
+          <td class="endpoint-path">/v1/policies/validate</td>
+          <td>Validate a policy definition</td>
+        </tr>
+        <tr>
+          <td><span class="endpoint-method method-get">GET</span></td>
+          <td class="endpoint-path">/v1/analytics/summary</td>
+          <td>Decision analytics summary</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p><a href="api.html" class="btn btn-primary">Full API Reference →</a></p>
+</section>
+
+<!-- ═══════════════════════════ CTA ═══════════════════════════ -->
+<section style="background:var(--bg-hero);color:#fff;text-align:center;padding:5rem 2rem;">
+  <h2 style="color:#fff;margin-top:0;font-size:2.2rem;">Ready to Protect Your APIs?</h2>
+  <p style="color:rgba(255,255,255,.7);max-width:540px;margin:0 auto 2rem;font-size:1.05rem;">RLAAS is ready for customer integration in controlled production environments. Start with the Quick Start guide.</p>
+  <div class="hero-cta">
+    <a href="getting-started.html" class="btn btn-primary">Quick Start Guide</a>
+    <a href="https://github.com/suresh-p26/RLAAS" class="btn btn-outline">View on GitHub</a>
+  </div>
+</section>
+
+<!-- ═══════════════════════════ FOOTER ═══════════════════════════ -->
+<footer class="footer">
+  <div class="footer-inner">
+    <ul class="footer-links">
+      <li><a href="index.html">Home</a></li>
+      <li><a href="features.html">Features</a></li>
+      <li><a href="design.html">Design Document</a></li>
+      <li><a href="api.html">API Reference</a></li>
+      <li><a href="sdks.html">SDKs</a></li>
+      <li><a href="getting-started.html">Get Started</a></li>
+    </ul>
+    <p>RLAAS — Rate Limiting As A Service &copy; 2024&ndash;2026</p>
+  </div>
+</footer>
+
+<!-- ═══════════════════════════ SCROLL TO TOP ═══════════════════════════ -->
+<button class="scroll-top" id="scrollTop" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Scroll to top">
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+</button>
+
+<script>
+window.addEventListener('scroll',()=>{
+  document.getElementById('scrollTop').classList.toggle('visible', window.scrollY > 400);
+});
+</script>
+
+</body>
+</html>

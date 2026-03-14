@@ -1,5 +1,7 @@
 # Rate Limiting As A Service (RLAAS)
 
+> **📖 Official Documentation:** [https://suresh-p26.github.io/RLAAS/](https://suresh-p26.github.io/RLAAS/) — features, design document, API reference, SDK guides, and getting started.
+
 RLAAS (Rate Limiting as a Service) is a policy-driven platform for enforcing limits, quotas, and traffic control across APIs and service workloads.
 
 It supports three deployment models:

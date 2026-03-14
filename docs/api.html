@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>API Reference — RLAAS</title>
+  <meta name="description" content="Complete HTTP and gRPC API reference for RLAAS — decision, policy management, analytics, and sidecar endpoints." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Lora:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav"><div class="nav-inner">
+  <a href="index.html" class="nav-logo">RLAAS<span>.</span></a>
+  <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+  </button>
+  <ul class="nav-links">
+    <li><a href="index.html">Home</a></li>
+    <li><a href="features.html">Features</a></li>
+    <li><a href="design.html">Design</a></li>
+    <li><a href="api.html" class="active">API</a></li>
+    <li><a href="sdks.html">SDKs</a></li>
+    <li><a href="getting-started.html">Get Started</a></li>
+  </ul>
+</div></nav>
+
+<!-- LAYOUT -->
+<div class="layout-with-sidebar">
+
+<aside class="sidebar">
+  <h4>Endpoints</h4>
+  <ul>
+    <li><a href="#decision">Decision APIs</a></li>
+    <li><a href="#policies">Policy CRUD</a></li>
+    <li><a href="#lifecycle">Lifecycle APIs</a></li>
+    <li><a href="#analytics">Analytics</a></li>
+    <li><a href="#sidecar">Sidecar</a></li>
+    <li><a href="#grpc">gRPC Service</a></li>
+  </ul>
+  <h4>Reference</h4>
+  <ul>
+    <li><a href="#request-context">RequestContext</a></li>
+    <li><a href="#decision-object">Decision Object</a></li>
+    <li><a href="#policy-object">Policy Object</a></li>
+    <li><a href="#error-format">Error Format</a></li>
+  </ul>
+</aside>
+
+<main class="main-content">
+
+<div class="breadcrumb"><a href="index.html">Home</a> / API Reference</div>
+
+<h1>API Reference</h1>
+<p class="text-muted" style="margin-bottom:2.5rem;">Base URL: <code>http://localhost:8080</code> (default)</p>
+
+<!-- ═══════════ DECISION ═══════════ -->
+<section id="decision">
+<h2>Decision APIs</h2>
+<p>Core endpoints for rate-limit evaluation and concurrency control.</p>
+
+<!-- POST /v1/check -->
+<h3><span class="endpoint-method method-post">POST</span> <code>/v1/check</code></h3>
+<p>Evaluate a rate-limit decision for a request context.</p>
+
+<h4>Request Body</h4>
+<pre><code>{
+  "request_id": "req-1",
+  "org_id": "acme",
+  "tenant_id": "retail",
+  "signal_type": "http",
+  "operation": "charge",
+  "endpoint": "/v1/charge",
+  "method": "POST",
+  "user_id": "u1",
+  "tags": { "env": "production" }
+}</code></pre>
+
+<h4>Response (200 OK)</h4>
+<pre><code>{
+  "allowed": true,
+  "action": "allow",
+  "reason": "within_limit",
+  "matched_policy_id": "payments-limit",
+  "remaining": 99,
+  "retry_after": 0,
+  "shadow_mode": false
+}</code></pre>
+
+<div class="callout callout-info">
+  <strong>Tip</strong>
+  All fields in the request body are optional except <code>signal_type</code>. The engine matches the most specific policy based on provided fields.
+</div>
+
+<!-- POST /v1/acquire -->
+<h3><span class="endpoint-method method-post">POST</span> <code>/v1/acquire</code></h3>
+<p>Acquire a concurrency lease. Use with concurrency limiter algorithm.</p>
+
+<h4>Request Body</h4>
+<pre><code>{
+  "request_id": "req-2",
+  "org_id": "acme",
+  "signal_type": "http",
+  "operation": "heavy-query",
+  "user_id": "u1"
+}</code></pre>
+
+<h4>Response</h4>
+<pre><code>{
+  "allowed": true,
+  "action": "allow",
+  "reason": "lease_acquired",
+  "remaining": 4
+}</code></pre>
+
+<!-- POST /v1/release -->
+<h3><span class="endpoint-method method-post">POST</span> <code>/v1/release</code></h3>
+<p>Release a previously acquired concurrency lease.</p>
+
+<h4>Request Body</h4>
+<pre><code>{
+  "request_id": "req-2",
+  "org_id": "acme",
+  "signal_type": "http",
+  "operation": "heavy-query",
+  "user_id": "u1"
+}</code></pre>
+
+<h4>Response</h4>
+<pre><code>{
+  "allowed": true,
+  "action": "allow",
+  "reason": "lease_released"
+}</code></pre>
+</section>
+
+<hr />
+
+<!-- ═══════════ POLICIES ═══════════ -->
+<section id="policies">
+<h2>Policy CRUD</h2>
+
+<!-- GET /v1/policies -->
+<h3><span class="endpoint-method method-get">GET</span> <code>/v1/policies</code></h3>
+<p>List all policies.</p>
+<h4>Response</h4>
+<pre><code>[
+  {
+    "policy_id": "payments-limit",
+    "name": "Payments limit",
+    "enabled": true,
+    "priority": 100,
+    "scope": { "org_id": "acme", "signal_type": "http", "operation": "charge" },
+    "algorithm": { "type": "fixed_window", "limit": 100, "window": "1m" },
+    "action": "deny",
+    "failure_mode": "fail_open",
+    "enforcement_mode": "enforce",
+    "rollout_percent": 100
+  }
+]</code></pre>
+
+<!-- POST /v1/policies -->
+<h3><span class="endpoint-method method-post">POST</span> <code>/v1/policies</code></h3>
+<p>Create a new policy.</p>
+<h4>Request Body</h4>
+<pre><code>{
+  "policy_id": "payments-limit",
+  "name": "Payments limit",
+  "enabled": true,
+  "priority": 100,
+  "scope": {
+    "org_id": "acme",
+    "signal_type": "http",
+    "operation": "charge"
+  },
+  "algorithm": {
+    "type": "fixed_window",
+    "limit": 100,
+    "window": "1m"
+  },
+  "action": "deny",
+  "failure_mode": "fail_open",
+  "enforcement_mode": "enforce",
+  "rollout_percent": 100
+}</code></pre>
+
+<!-- GET /v1/policies/{id} -->
+<h3><span class="endpoint-method method-get">GET</span> <code>/v1/policies/{id}</code></h3>
+<p>Get a specific policy by ID.</p>
+
+<!-- PUT /v1/policies/{id} -->
+<h3><span class="endpoint-method method-put">PUT</span> <code>/v1/policies/{id}</code></h3>
+<p>Update an existing policy. The full policy body is required.</p>
+
+<!-- DELETE /v1/policies/{id} -->
+<h3><span class="endpoint-method method-delete">DELETE</span> <code>/v1/policies/{id}</code></h3>
+<p>Delete a policy by ID.</p>
+</section>
+
+<hr />
+
+<!-- ═══════════ LIFECYCLE ═══════════ -->
+<section id="lifecycle">
+<h2>Policy Lifecycle APIs</h2>
+
+<!-- POST /v1/policies/validate -->
+<h3><span class="endpoint-method method-post">POST</span> <code>/v1/policies/validate</code></h3>
+<p>Validate a policy definition before deployment.</p>
+<h4>Request</h4>
+<pre><code>{
+  "name": "Validation sample",
+  "enabled": true,
+  "scope": { "signal_type": "http", "operation": "charge" },
+  "algorithm": { "type": "fixed_window", "limit": 10, "window": "1m" },
+  "action": "deny",
+  "rollout_percent": 50
+}</code></pre>
+<h4>Response</h4>
+<pre><code>{ "valid": true }</code></pre>
+
+<!-- POST /v1/policies/{id}/rollout -->
+<h3><span class="endpoint-method method-post">POST</span> <code>/v1/policies/{id}/rollout</code></h3>
+<p>Update the rollout percentage for gradual enforcement.</p>
+<pre><code>{ "rollout_percent": 25 }</code></pre>
+
+<!-- POST /v1/policies/{id}/rollback -->
+<h3><span class="endpoint-method method-post">POST</span> <code>/v1/policies/{id}/rollback</code></h3>
+<p>Roll back to a specific previous version.</p>
+<pre><code>{ "version": 1 }</code></pre>
+
+<!-- GET /v1/policies/{id}/audit -->
+<h3><span class="endpoint-method method-get">GET</span> <code>/v1/policies/{id}/audit</code></h3>
+<p>Get the audit trail for a policy — all changes with timestamps, action types, old/new values.</p>
+
+<!-- GET /v1/policies/{id}/versions -->
+<h3><span class="endpoint-method method-get">GET</span> <code>/v1/policies/{id}/versions</code></h3>
+<p>Get all historical versions of a policy for review or rollback.</p>
+</section>
+
+<hr />
+
+<!-- ═══════════ ANALYTICS ═══════════ -->
+<section id="analytics">
+<h2>Analytics</h2>
+
+<!-- GET /v1/analytics/summary -->
+<h3><span class="endpoint-method method-get">GET</span> <code>/v1/analytics/summary</code></h3>
+<p>Get a summary of decision events with tag aggregation.</p>
+
+<h4>Query Parameters</h4>
+<table>
+  <thead><tr><th>Param</th><th>Type</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td><code>top</code></td><td>integer</td><td>Return only top N entries (optional)</td></tr>
+  </tbody>
+</table>
+
+<h4>Example</h4>
+<pre><code>curl http://localhost:8080/v1/analytics/summary?top=5</code></pre>
+</section>
+
+<hr />
+
+<!-- ═══════════ SIDECAR ═══════════ -->
+<section id="sidecar">
+<h2>Sidecar / Agent Endpoints</h2>
+<p>Default port: <code>:18080</code></p>
+
+<div class="endpoint-table">
+<table>
+  <thead><tr><th>Method</th><th>Endpoint</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td><span class="endpoint-method method-post">POST</span></td><td class="endpoint-path">/v1/check</td><td>Local rate-limit decision (proxied to upstream)</td></tr>
+    <tr><td><span class="endpoint-method method-get">GET</span></td><td class="endpoint-path">/healthz</td><td>Health check</td></tr>
+    <tr><td><span class="endpoint-method method-get">GET</span></td><td class="endpoint-path">/v1/agent/status</td><td>Agent status and metadata</td></tr>
+    <tr><td><span class="endpoint-method method-post">POST</span></td><td class="endpoint-path">/v1/agent/invalidate</td><td>Trigger cache invalidation</td></tr>
+  </tbody>
+</table>
+</div>
+</section>
+
+<hr />
+
+<!-- ═══════════ gRPC ═══════════ -->
+<section id="grpc">
+<h2>gRPC Service</h2>
+<p>Proto definition: <code>api/proto/rlaas.proto</code> &nbsp;|&nbsp; Default port: <code>:9090</code></p>
+
+<pre><code>service RateLimitService {
+  rpc CheckLimit(CheckLimitRequest)  returns (CheckLimitResponse);
+  rpc Acquire(AcquireRequest)        returns (AcquireResponse);
+  rpc Release(ReleaseRequest)        returns (ReleaseResponse);
+}</code></pre>
+
+<p>The gRPC service exposes the same decision logic as the HTTP API. Generate client stubs from the proto file for any language.</p>
+</section>
+
+<hr />
+
+<!-- ═══════════ REFERENCE OBJECTS ═══════════ -->
+<section id="request-context">
+<h2>RequestContext Object</h2>
+<p>Sent as the body of decision API calls. All fields are optional except as noted.</p>
+
+<table>
+  <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td><code>request_id</code></td><td>string</td><td>Unique request identifier</td></tr>
+    <tr><td><code>org_id</code></td><td>string</td><td>Organization identifier</td></tr>
+    <tr><td><code>tenant_id</code></td><td>string</td><td>Tenant identifier</td></tr>
+    <tr><td><code>application</code></td><td>string</td><td>Application name</td></tr>
+    <tr><td><code>service</code></td><td>string</td><td>Service name</td></tr>
+    <tr><td><code>environment</code></td><td>string</td><td>Environment (prod, staging, dev)</td></tr>
+    <tr><td><code>signal_type</code></td><td>string</td><td>http, grpc, log, trace, event, auth, job, custom</td></tr>
+    <tr><td><code>operation</code></td><td>string</td><td>Operation name</td></tr>
+    <tr><td><code>endpoint</code></td><td>string</td><td>Endpoint path</td></tr>
+    <tr><td><code>method</code></td><td>string</td><td>HTTP method or gRPC method</td></tr>
+    <tr><td><code>user_id</code></td><td>string</td><td>User identifier</td></tr>
+    <tr><td><code>api_key</code></td><td>string</td><td>API key</td></tr>
+    <tr><td><code>client_id</code></td><td>string</td><td>Client identifier</td></tr>
+    <tr><td><code>source_ip</code></td><td>string</td><td>Source IP address</td></tr>
+    <tr><td><code>region</code></td><td>string</td><td>Region identifier</td></tr>
+    <tr><td><code>resource</code></td><td>string</td><td>Resource name</td></tr>
+    <tr><td><code>severity</code></td><td>string</td><td>Log severity level</td></tr>
+    <tr><td><code>span_name</code></td><td>string</td><td>Trace span name</td></tr>
+    <tr><td><code>topic</code></td><td>string</td><td>Message topic</td></tr>
+    <tr><td><code>consumer_group</code></td><td>string</td><td>Consumer group name</td></tr>
+    <tr><td><code>job_type</code></td><td>string</td><td>Background job type</td></tr>
+    <tr><td><code>quantity</code></td><td>int64</td><td>Cost per request (default 1)</td></tr>
+    <tr><td><code>tags</code></td><td>map&lt;string,string&gt;</td><td>Custom key-value tags</td></tr>
+  </tbody>
+</table>
+</section>
+
+<section id="decision-object">
+<h2>Decision Object</h2>
+<p>Returned by decision API calls.</p>
+<table>
+  <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td><code>allowed</code></td><td>bool</td><td>Whether the request is allowed</td></tr>
+    <tr><td><code>action</code></td><td>string</td><td>allow, deny, delay, sample, drop, shadow_only, ...</td></tr>
+    <tr><td><code>reason</code></td><td>string</td><td>Explanation (within_limit, limit_exceeded, ...)</td></tr>
+    <tr><td><code>matched_policy_id</code></td><td>string</td><td>ID of the policy that matched</td></tr>
+    <tr><td><code>remaining</code></td><td>int64</td><td>Remaining quota in current window</td></tr>
+    <tr><td><code>retry_after</code></td><td>duration</td><td>When to retry (for deny/delay)</td></tr>
+    <tr><td><code>shadow_mode</code></td><td>bool</td><td>Whether this was a shadow-only evaluation</td></tr>
+    <tr><td><code>metadata</code></td><td>map</td><td>Additional decision metadata</td></tr>
+  </tbody>
+</table>
+</section>
+
+<section id="policy-object">
+<h2>Policy Object</h2>
+<p>Used for policy CRUD operations.</p>
+<table>
+  <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td><code>policy_id</code></td><td>string</td><td>Unique policy identifier</td></tr>
+    <tr><td><code>name</code></td><td>string</td><td>Human-readable name</td></tr>
+    <tr><td><code>enabled</code></td><td>bool</td><td>Whether the policy is active</td></tr>
+    <tr><td><code>priority</code></td><td>int</td><td>Higher = more important</td></tr>
+    <tr><td><code>scope</code></td><td>PolicyScope</td><td>Matching dimensions</td></tr>
+    <tr><td><code>algorithm</code></td><td>AlgorithmConfig</td><td>Algorithm type and config</td></tr>
+    <tr><td><code>action</code></td><td>string</td><td>Action when limit exceeded</td></tr>
+    <tr><td><code>failure_mode</code></td><td>string</td><td>fail_open or fail_closed</td></tr>
+    <tr><td><code>enforcement_mode</code></td><td>string</td><td>enforce or shadow</td></tr>
+    <tr><td><code>rollout_percent</code></td><td>int</td><td>0–100, progressive rollout</td></tr>
+    <tr><td><code>metadata</code></td><td>map</td><td>Extra metadata (match_expr, etc.)</td></tr>
+  </tbody>
+</table>
+</section>
+
+<section id="error-format">
+<h2>Error Format</h2>
+<p>All error responses return a JSON body with a descriptive message:</p>
+<pre><code>{
+  "error": "policy not found",
+  "status": 404
+}</code></pre>
+</section>
+
+<hr />
+<p class="text-muted text-center" style="margin-top:2rem;"><a href="index.html">← Back to Home</a></p>
+
+</main>
+</div>
+
+<!-- FOOTER -->
+<footer class="footer">
+  <div class="footer-inner">
+    <ul class="footer-links">
+      <li><a href="index.html">Home</a></li>
+      <li><a href="features.html">Features</a></li>
+      <li><a href="design.html">Design</a></li>
+      <li><a href="api.html">API</a></li>
+      <li><a href="sdks.html">SDKs</a></li>
+      <li><a href="getting-started.html">Get Started</a></li>
+    </ul>
+    <p>RLAAS — Rate Limiting As A Service &copy; 2024&ndash;2026</p>
+  </div>
+</footer>
+
+<button class="scroll-top" id="scrollTop" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Scroll to top">
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+</button>
+<script>
+window.addEventListener('scroll',()=>{document.getElementById('scrollTop').classList.toggle('visible',window.scrollY>400);});
+const sections = document.querySelectorAll('section[id]');
+const links = document.querySelectorAll('.sidebar a');
+const obs = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      links.forEach(l => l.classList.remove('active'));
+      const a = document.querySelector('.sidebar a[href="#'+e.target.id+'"]');
+      if (a) a.classList.add('active');
+    }
+  });
+}, { rootMargin: '-80px 0px -60% 0px' });
+sections.forEach(s => obs.observe(s));
+</script>
+</body>
+</html>
