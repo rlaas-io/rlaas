@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -143,7 +144,7 @@ func proxyCheck(w http.ResponseWriter, r *http.Request, cfg agentConfig, client 
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
-	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, cfg.UpstreamBase+"/v1/check", strings.NewReader(string(body)))
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, cfg.UpstreamBase+"/v1/check", bytes.NewReader(body))
 	if err != nil {
 		http.Error(w, "upstream request error", http.StatusInternalServerError)
 		return
@@ -173,6 +174,14 @@ func startSyncLoop(ctx context.Context, cfg agentConfig, client *http.Client, st
 		case <-ctx.Done():
 			return
 		case policyID := <-invalidations:
+			for {
+				select {
+				case <-invalidations:
+				default:
+					goto drained
+				}
+			}
+		drained:
 			fetchPolicySnapshot(ctx, cfg, client, state)
 			log.Printf("rlaas-agent processed invalidation for policy %s", policyID)
 		case <-ticker.C:

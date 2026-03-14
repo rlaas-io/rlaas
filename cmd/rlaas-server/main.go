@@ -19,6 +19,7 @@ import (
 	filestore "rlaas/internal/store/policy/file"
 	"rlaas/pkg/rlaas"
 	"strings"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc"
@@ -58,6 +59,7 @@ func runAll(listenFn func(*server.HTTPServer) error, grpcListenFn func(*server.G
 	analyticsRecorder := analytics.NewRecorder()
 	invalidationTargets := loadInvalidationTargets()
 	pushClient := &http.Client{Timeout: 2 * time.Second}
+	enqueueInvalidation := startInvalidationDispatcher(pushClient, invalidationTargets, analyticsRecorder)
 	b.Subscribe("policy.changed", func(event map[string]string) {
 		analyticsRecorder.Record(context.Background(), "policy_invalidation_event", event)
 	})
@@ -69,7 +71,7 @@ func runAll(listenFn func(*server.HTTPServer) error, grpcListenFn func(*server.G
 	mux.Handle("/v1/release", releaseHandler)
 	policiesHandler := httpadapter.PoliciesHandlerWithHooks(policyStore, func(ctx context.Context, topic string, event map[string]string) error {
 		_ = b.Publish(ctx, topic, event)
-		publishInvalidation(ctx, pushClient, invalidationTargets, event)
+		enqueueInvalidation(copyEvent(event))
 		return nil
 	}, analyticsRecorder.Record)
 	mux.Handle("/v1/policies", policiesHandler)
@@ -88,6 +90,42 @@ func runAll(listenFn func(*server.HTTPServer) error, grpcListenFn func(*server.G
 		return err
 	}
 	return listenFn(httpServer)
+}
+
+func startInvalidationDispatcher(client *http.Client, targets []string, analyticsRecorder *analytics.Recorder) func(map[string]string) {
+	if len(targets) == 0 || client == nil {
+		return func(map[string]string) {}
+	}
+	const queueSize = 256
+	workers := len(targets)
+	if workers > 4 {
+		workers = 4
+	}
+	queue := make(chan map[string]string, queueSize)
+	for i := 0; i < workers; i++ {
+		go func() {
+			for event := range queue {
+				publishInvalidation(context.Background(), client, targets, event)
+			}
+		}()
+	}
+	return func(event map[string]string) {
+		select {
+		case queue <- event:
+		default:
+			if analyticsRecorder != nil {
+				analyticsRecorder.Record(context.Background(), "policy_invalidation_dropped", map[string]string{"reason": "queue_full"})
+			}
+		}
+	}
+}
+
+func copyEvent(event map[string]string) map[string]string {
+	out := make(map[string]string, len(event))
+	for k, v := range event {
+		out[k] = v
+	}
+	return out
 }
 
 func defaultListen(s *server.HTTPServer) error {
@@ -130,17 +168,35 @@ func publishInvalidation(ctx context.Context, client *http.Client, targets []str
 	if err != nil {
 		return
 	}
-	for _, target := range targets {
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(target, "/")+"/v1/agent/invalidate", bytes.NewReader(body))
-		if err != nil {
-			continue
-		}
-		req.Header.Set("Content-Type", "application/json")
-		resp, err := client.Do(req)
-		if err != nil {
-			continue
-		}
-		_, _ = io.Copy(io.Discard, resp.Body)
-		_ = resp.Body.Close()
+	workerCount := len(targets)
+	if workerCount > 8 {
+		workerCount = 8
 	}
+	jobs := make(chan string, len(targets))
+	for _, t := range targets {
+		jobs <- t
+	}
+	close(jobs)
+
+	var wg sync.WaitGroup
+	for i := 0; i < workerCount; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for target := range jobs {
+				req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(target, "/")+"/v1/agent/invalidate", bytes.NewReader(body))
+				if err != nil {
+					continue
+				}
+				req.Header.Set("Content-Type", "application/json")
+				resp, err := client.Do(req)
+				if err != nil {
+					continue
+				}
+				_, _ = io.Copy(io.Discard, resp.Body)
+				_ = resp.Body.Close()
+			}
+		}()
+	}
+	wg.Wait()
 }
