@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+package rlaas.v1;
+
+option go_package = "rlaas/api/proto;rlaasv1";
+
+service RateLimitService {
+  rpc CheckLimit(CheckLimitRequest) returns (CheckLimitResponse);
+  rpc Acquire(AcquireRequest) returns (AcquireResponse);
+  rpc Release(ReleaseRequest) returns (ReleaseResponse);
+}
+
+message CheckLimitRequest {
+  string request_id = 1;
+  string org_id = 2;
+  string tenant_id = 3;
+  string signal_type = 4;
+  string operation = 5;
+  string endpoint = 6;
+  string method = 7;
+  string user_id = 8;
+  string api_key = 9;
+}
+
+message CheckLimitResponse {
+  bool allowed = 1;
+  string action = 2;
+  string reason = 3;
+  int64 remaining = 4;
+  int64 retry_after_ms = 5;
+}
+
+message AcquireRequest {
+  string request_id = 1;
+  string org_id = 2;
+  string tenant_id = 3;
+  string operation = 4;
+}
+
+message AcquireResponse {
+  bool allowed = 1;
+  string lease_id = 2;
+  string reason = 3;
+}
+
+message ReleaseRequest {
+  string lease_id = 1;
+}
+
+message ReleaseResponse {
+  bool released = 1;
+}
