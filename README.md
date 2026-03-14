@@ -1,31 +1,27 @@
-# RLAAS
+# Rate Limiting As A Service (RLAAS)
 
-RLAAS (Rate Limiting as a Service) is a policy-driven platform for enforcing limits, quotas, and traffic control across APIs and services.
+RLAAS (Rate Limiting as a Service) is a policy-driven platform for enforcing limits, quotas, and traffic control across APIs and service workloads.
 
-It supports hybrid usage:
-- embedded in Go services (low latency)
-- centralized HTTP/gRPC decision service
-- sidecar-style local proxy mode
+It supports three deployment models:
+- Go SDK (embedded, low latency)
+- Centralized HTTP/gRPC decision service
+- Sidecar local proxy model
 
-## What customers can do today
+## Completed capabilities
 
-- Define and manage policies with scoped dimensions (org, tenant, service, endpoint, user, and tags).
-- Enforce limits using fixed window, token bucket, sliding window counter, concurrency, and quota algorithms.
-- Apply actions such as allow, deny, delay, sample, drop, and shadow-only.
-- Use policy safety workflows: validate policy shape and rollback to an earlier version.
-- Track policy history (audit + versions) and control rollout percentage.
-- Consume runtime decisions through HTTP and gRPC APIs.
-- Run sidecar-style local proxy with background policy sync and invalidation intake.
+### Core rate limiting
 
-## Current implementation status
+- Algorithms: fixed window, token bucket, sliding window counter, concurrency limiter, quota limiter
+- Actions: allow, deny, delay, sample, drop, shadow-only
+- Policy matching dimensions: org, tenant, app, service, operation, endpoint, method, user, API key, client, region, resource, severity, topic, tags
 
-### Available now
+### Control plane APIs
 
-- Decision APIs
+- Decision:
   - `POST /v1/check`
   - `POST /v1/acquire`
   - `POST /v1/release`
-- Policy APIs
+- Policy management:
   - `GET /v1/policies`
   - `POST /v1/policies`
   - `GET /v1/policies/{id}`
@@ -36,23 +32,41 @@ It supports hybrid usage:
   - `POST /v1/policies/{id}/rollout`
   - `POST /v1/policies/validate`
   - `POST /v1/policies/{id}/rollback`
-- Analytics & invalidation
-  - `GET /v1/analytics/summary` (event + tag aggregation, optional `top` query)
-  - in-process invalidation broker + optional push fanout to sidecars
-- gRPC runtime
-  - `CheckLimit`, `Acquire`, `Release` (from `api/proto/rlaas.proto`)
-- Sidecar runtime
-  - local proxy `POST /v1/check`
-  - health `GET /healthz`
-  - status `GET /v1/agent/status`
-  - invalidation intake `POST /v1/agent/invalidate`
 
-### Backends available now
+### Service and runtime features
+
+- gRPC decision service (proto in `api/proto/rlaas.proto`): `CheckLimit`, `Acquire`, `Release`
+- Sidecar endpoints:
+  - `POST /v1/check`
+  - `GET /healthz`
+  - `GET /v1/agent/status`
+  - `POST /v1/agent/invalidate`
+- Analytics:
+  - `GET /v1/analytics/summary` (event and tag aggregation, optional `top`)
+- Invalidation:
+  - in-process broker
+  - async push fanout to sidecars using bounded workers
+- Performance features:
+  - lock-sharded in-memory counters
+  - invalidation burst coalescing in sidecar sync loop
+- Non-Go SDKs:
+  - Python SDK (`sdk/python`)
+  - TypeScript SDK (`sdk/typescript`)
+  - Java SDK (`sdk/java`)
+  - .NET SDK (`sdk/dotnet`)
+
+### Recently completed from previous “in-progress” scope
+
+- OTEL processor primitives for batch log/span filtering with worker pools
+- Multi-region allocation primitives for regional limit split and overflow detection
+- Advanced `match_expr` policy expression support in matcher metadata
+
+### Available backends
 
 - Policy store: JSON file store
 - Counter stores: in-memory and Redis
 
-## Local run guide
+## Quick start (local)
 
 ### Prerequisites
 
@@ -64,7 +78,7 @@ It supports hybrid usage:
 go mod tidy
 ```
 
-### 2) Run RLAAS server
+### 2) Run server
 
 ```bash
 go run ./cmd/rlaas-server
@@ -75,7 +89,7 @@ Optional environment variables:
 - `RLAAS_GRPC_ADDR` (default: `:9090`)
 - `RLAAS_INVALIDATION_TARGETS` (comma-separated sidecar base URLs)
 
-### 3) Run sidecar (optional)
+### 3) Optional: run sidecar
 
 ```bash
 go run ./cmd/rlaas-agent
@@ -86,7 +100,7 @@ Optional environment variables:
 - `RLAAS_UPSTREAM_HTTP` (default: `http://localhost:8080`)
 - `RLAAS_AGENT_SYNC_SECS` (default: `30`)
 
-### 4) Verify with one HTTP decision call
+### 4) Test one decision
 
 ```powershell
 $body = @{
@@ -103,41 +117,169 @@ $body = @{
 Invoke-RestMethod -Method Post -Uri "http://localhost:8080/v1/check" -ContentType "application/json" -Body $body
 ```
 
-### 5) Run tests
+### 5) Run tests and benchmarks
 
 ```bash
 go test ./...
+go test ./benchmarks -run ^$ -bench . -benchmem
 ```
 
-## Customer integration patterns
+## Customer integration guide
 
-### Pattern A: Centralized HTTP decisioning
+### Option A: Centralized HTTP
 
-1. Your service sends request context to `POST /v1/check`.
-2. RLAAS returns `allowed`, `action`, `reason`, and remaining/retry metadata.
-3. Your service enforces the returned action.
+1. Send `RequestContext` to `POST /v1/check`.
+2. Read `allowed`, `action`, `reason`, `remaining`, `retry_after`.
+3. Enforce behavior in your service.
 
-### Pattern B: Centralized gRPC decisioning
+### Option B: Centralized gRPC
 
-1. Generate client stubs from `api/proto/rlaas.proto`.
-2. Call `CheckLimit` before executing protected operations.
-3. Use `Acquire`/`Release` for concurrency workflows.
+1. Generate stubs from `api/proto/rlaas.proto`.
+2. Call `CheckLimit` before protected work.
+3. Use `Acquire`/`Release` for concurrency-limited sections.
 
-### Pattern C: Sidecar local proxy
+### Option C: Sidecar local mode
 
-1. Deploy app + sidecar together.
-2. App calls sidecar `POST /v1/check` on localhost.
-3. Sidecar syncs policies from upstream and accepts invalidation pushes.
+1. Run app and sidecar together.
+2. Call sidecar `POST /v1/check` locally.
+3. Let sidecar handle sync and invalidation updates.
 
-## Future scope
+### Option D: Non-Go SDK clients
 
-- Production PostgreSQL and Oracle policy/counter persistence
-- Expanded OTEL processors and production observability pack
-- Multi-region control/decision deployment strategy
-- Admin/operator UX and policy governance workflows
-- Additional SDKs for non-Go ecosystems
-- Advanced policy expressions and richer action routing
+- Python SDK: see `sdk/python`
+- TypeScript SDK: see `sdk/typescript`
+- Java SDK: see `sdk/java`
+- .NET SDK: see `sdk/dotnet`
+
+Both SDKs support `check`, `acquire/release`, policy CRUD, validate/rollout/rollback, audit/version APIs, and analytics summary.
+
+## API examples (copy/paste)
+
+Base URL: `http://localhost:8080`
+
+### 1) Check decision
+
+Request:
+
+```bash
+curl -X POST http://localhost:8080/v1/check \
+  -H "Content-Type: application/json" \
+  -d '{
+    "request_id":"r1",
+    "org_id":"acme",
+    "tenant_id":"retail",
+    "signal_type":"http",
+    "operation":"charge",
+    "endpoint":"/v1/charge",
+    "method":"POST",
+    "user_id":"u1"
+  }'
+```
+
+Typical response:
+
+```json
+{
+  "allowed": true,
+  "action": "allow",
+  "reason": "within_limit",
+  "remaining": 99
+}
+```
+
+### 2) Create policy
+
+Request:
+
+```bash
+curl -X POST http://localhost:8080/v1/policies \
+  -H "Content-Type: application/json" \
+  -d '{
+    "policy_id":"payments-limit",
+    "name":"Payments limit",
+    "enabled":true,
+    "priority":100,
+    "scope":{"org_id":"acme","signal_type":"http","operation":"charge"},
+    "algorithm":{"type":"fixed_window","limit":100,"window":"1m"},
+    "action":"deny",
+    "failure_mode":"fail_open",
+    "enforcement_mode":"enforce",
+    "rollout_percent":100
+  }'
+```
+
+### 3) Validate policy before rollout
+
+Request:
+
+```bash
+curl -X POST http://localhost:8080/v1/policies/validate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name":"Validation sample",
+    "enabled":true,
+    "scope":{"signal_type":"http","operation":"charge"},
+    "algorithm":{"type":"fixed_window","limit":10,"window":"1m"},
+    "action":"deny",
+    "rollout_percent":50
+  }'
+```
+
+Response:
+
+```json
+{"valid":true}
+```
+
+### 4) Update rollout percentage
+
+Request:
+
+```bash
+curl -X POST http://localhost:8080/v1/policies/payments-limit/rollout \
+  -H "Content-Type: application/json" \
+  -d '{"rollout_percent":25}'
+```
+
+### 5) Roll back to a previous policy version
+
+Request:
+
+```bash
+curl -X POST http://localhost:8080/v1/policies/payments-limit/rollback \
+  -H "Content-Type: application/json" \
+  -d '{"version":1}'
+```
+
+### 6) Query policy history and versions
+
+```bash
+curl http://localhost:8080/v1/policies/payments-limit/audit
+curl http://localhost:8080/v1/policies/payments-limit/versions
+```
+
+### 7) Query analytics summary
+
+```bash
+curl http://localhost:8080/v1/analytics/summary
+curl "http://localhost:8080/v1/analytics/summary?top=5"
+```
+
+## Production readiness checklist
+
+- Run behind TLS termination (ingress/proxy)
+- Use Redis for distributed counters
+- Configure health probes on `/healthz`
+- Use sidecar invalidation targets for faster policy propagation
+- Monitor decision and analytics endpoints
+- Run benchmark suite for baseline before rollout
+
+## Remaining roadmap (not completed yet)
+
+- Production-grade PostgreSQL policy and counter stores
+- Production-grade Oracle policy and counter stores
+- Admin/operator UX and policy governance workflows (deferred by plan)
 
 ## Project stage
 
-RLAAS is in early platform stage and ready for local development, integration testing, and controlled adoption.
+RLAAS is ready for customer integration in controlled production environments, with remaining roadmap focused on enterprise persistence backends and broader SDK/UX surface.

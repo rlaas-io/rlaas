@@ -52,3 +52,37 @@ func TestMatchTagMismatch(t *testing.T) {
 		t.Fatalf("expected no match due to tag mismatch")
 	}
 }
+
+func TestMatchExpression(t *testing.T) {
+	m := New()
+	req := model.RequestContext{OrgID: "acme", SignalType: "http", Operation: "charge", Method: "POST", Tags: map[string]string{"tier": "gold"}}
+	policies := []model.Policy{
+		{PolicyID: "p1", Scope: model.PolicyScope{OrgID: "acme"}, Metadata: map[string]string{"match_expr": "method==POST&&tag.tier==gold"}},
+		{PolicyID: "p2", Scope: model.PolicyScope{OrgID: "acme"}, Metadata: map[string]string{"match_expr": "method==GET"}},
+	}
+	matched, err := m.Match(req, policies)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(matched) != 1 || matched[0].PolicyID != "p1" {
+		t.Fatalf("expected p1 to match expression")
+	}
+}
+
+func TestEvaluateExpression(t *testing.T) {
+	req := model.RequestContext{OrgID: "acme", Method: "POST", Tags: map[string]string{"env": "prod"}}
+	ok, err := evaluateExpression(req, "org_id==acme&&method!=GET&&tag.env==prod")
+	if err != nil || !ok {
+		t.Fatalf("expected expression to pass")
+	}
+	ok, err = evaluateExpression(req, "method==GET")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ok {
+		t.Fatalf("expected expression to fail")
+	}
+	if _, err = evaluateExpression(req, "bad-clause"); err == nil {
+		t.Fatalf("expected invalid clause error")
+	}
+}

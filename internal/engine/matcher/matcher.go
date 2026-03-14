@@ -2,8 +2,10 @@ package matcher
 
 import (
 	"errors"
+	"fmt"
 	"rlaas/internal/model"
 	"sort"
+	"strings"
 )
 
 // Matcher finds policies that apply to a request and picks the final winner.
@@ -24,11 +26,26 @@ func New() *DefaultMatcher {
 func (m *DefaultMatcher) Match(req model.RequestContext, policies []model.Policy) ([]model.Policy, error) {
 	matched := make([]model.Policy, 0, len(policies))
 	for _, policy := range policies {
-		if matchesScope(req, policy.Scope) {
+		if matchesPolicy(req, policy) {
 			matched = append(matched, policy)
 		}
 	}
 	return matched, nil
+}
+
+func matchesPolicy(req model.RequestContext, p model.Policy) bool {
+	if !matchesScope(req, p.Scope) {
+		return false
+	}
+	expr := ""
+	if p.Metadata != nil {
+		expr = strings.TrimSpace(p.Metadata["match_expr"])
+	}
+	if expr == "" {
+		return true
+	}
+	ok, err := evaluateExpression(req, expr)
+	return err == nil && ok
 }
 
 // SelectWinner chooses one policy using specificity, priority, and policy id.
@@ -82,4 +99,82 @@ func specificityScore(s model.PolicyScope) int {
 	}
 	score += len(s.Tags)
 	return score
+}
+
+func evaluateExpression(req model.RequestContext, expr string) (bool, error) {
+	clauses := strings.Split(expr, "&&")
+	for _, raw := range clauses {
+		clause := strings.TrimSpace(raw)
+		if clause == "" {
+			continue
+		}
+		op := "=="
+		parts := strings.SplitN(clause, "==", 2)
+		if len(parts) != 2 {
+			op = "!="
+			parts = strings.SplitN(clause, "!=", 2)
+		}
+		if len(parts) != 2 {
+			return false, fmt.Errorf("invalid clause: %s", clause)
+		}
+		left := strings.TrimSpace(parts[0])
+		right := strings.Trim(strings.TrimSpace(parts[1]), "\"'")
+		actual := resolveExprField(req, left)
+		if op == "==" && actual != right {
+			return false, nil
+		}
+		if op == "!=" && actual == right {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
+func resolveExprField(req model.RequestContext, field string) string {
+	switch field {
+	case "org_id":
+		return req.OrgID
+	case "tenant_id":
+		return req.TenantID
+	case "application":
+		return req.Application
+	case "service":
+		return req.Service
+	case "environment":
+		return req.Environment
+	case "signal_type":
+		return req.SignalType
+	case "operation":
+		return req.Operation
+	case "endpoint":
+		return req.Endpoint
+	case "method":
+		return req.Method
+	case "user_id":
+		return req.UserID
+	case "api_key":
+		return req.APIKey
+	case "client_id":
+		return req.ClientID
+	case "source_ip":
+		return req.SourceIP
+	case "region":
+		return req.Region
+	case "resource":
+		return req.Resource
+	case "severity":
+		return req.Severity
+	case "span_name":
+		return req.SpanName
+	case "topic":
+		return req.Topic
+	case "consumer_group":
+		return req.ConsumerGroup
+	case "job_type":
+		return req.JobType
+	}
+	if strings.HasPrefix(field, "tag.") {
+		return req.Tags[strings.TrimPrefix(field, "tag.")]
+	}
+	return ""
 }
