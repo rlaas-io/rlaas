@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rlaas-sdk"
+version = "0.1.0"
+description = "Python SDK for RLAAS HTTP APIs"
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [{ name = "RLAAS" }]
+dependencies = ["requests>=2.31.0"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["rlaas_sdk*"]
