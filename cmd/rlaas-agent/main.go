@@ -116,10 +116,10 @@ func loadConfig() (agentConfig, error) {
 func buildServer(cfg agentConfig, client *http.Client, state *syncState, invalidations chan<- string) *http.Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
-	mux.HandleFunc("/v1/check", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/rlaas/v1/check", func(w http.ResponseWriter, r *http.Request) {
 		proxyCheck(w, r, cfg, client)
 	})
-	mux.HandleFunc("/v1/agent/invalidate", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/rlaas/v1/agent/invalidate", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
@@ -145,7 +145,7 @@ func buildServer(cfg agentConfig, client *http.Client, state *syncState, invalid
 		w.WriteHeader(http.StatusAccepted)
 		_ = json.NewEncoder(w).Encode(map[string]any{"queued": true, "policy_id": req.PolicyID})
 	})
-	mux.HandleFunc("/v1/agent/status", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/rlaas/v1/agent/status", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(state.snapshot())
 	})
@@ -190,7 +190,7 @@ func proxyCheck(w http.ResponseWriter, r *http.Request, cfg agentConfig, client 
 		http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
 		return
 	}
-	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, cfg.UpstreamBase+"/v1/check", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, cfg.UpstreamBase+"/rlaas/v1/check", bytes.NewReader(body))
 	if err != nil {
 		http.Error(w, "upstream request error", http.StatusInternalServerError)
 		return
@@ -241,7 +241,7 @@ func startSyncLoop(ctx context.Context, cfg agentConfig, client *http.Client, st
 // fetchPolicySnapshot retrieves the full policy list from the upstream
 // server and updates sync state accordingly.
 func fetchPolicySnapshot(ctx context.Context, cfg agentConfig, client *http.Client, state *syncState) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, cfg.UpstreamBase+"/v1/policies", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, cfg.UpstreamBase+"/rlaas/v1/policies", nil)
 	if err != nil {
 		state.markError(err.Error())
 		return

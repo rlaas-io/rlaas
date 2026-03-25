@@ -21,7 +21,7 @@ func TestAuthMiddleware_Disabled(t *testing.T) {
 	h := AuthMiddleware(cfg, inner)
 
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest("GET", "/v1/policies", nil))
+	h.ServeHTTP(rec, httptest.NewRequest("GET", "/rlaas/v1/policies", nil))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("disabled auth should pass through, got %d", rec.Code)
 	}
@@ -57,7 +57,7 @@ func TestAuthMiddleware_APIKey_Valid(t *testing.T) {
 	}
 	h := AuthMiddleware(cfg, inner)
 
-	req := httptest.NewRequest("GET", "/v1/policies", nil)
+	req := httptest.NewRequest("GET", "/rlaas/v1/policies", nil)
 	req.Header.Set("X-Api-Key", "my-secret-key")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -77,7 +77,7 @@ func TestAuthMiddleware_APIKey_Invalid(t *testing.T) {
 	}
 	h := AuthMiddleware(cfg, inner)
 
-	req := httptest.NewRequest("GET", "/v1/policies", nil)
+	req := httptest.NewRequest("GET", "/rlaas/v1/policies", nil)
 	req.Header.Set("X-Api-Key", "wrong-key")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -98,7 +98,7 @@ func TestAuthMiddleware_APIKey_Missing(t *testing.T) {
 	h := AuthMiddleware(cfg, inner)
 
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest("GET", "/v1/policies", nil))
+	h.ServeHTTP(rec, httptest.NewRequest("GET", "/rlaas/v1/policies", nil))
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("missing API key should get 401, got %d", rec.Code)
 	}
@@ -127,7 +127,7 @@ func TestAuthMiddleware_JWT_Valid(t *testing.T) {
 	}
 	h := AuthMiddleware(cfg, inner)
 
-	req := httptest.NewRequest("POST", "/v1/policies", nil)
+	req := httptest.NewRequest("POST", "/rlaas/v1/policies", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -153,7 +153,7 @@ func TestAuthMiddleware_JWT_Expired(t *testing.T) {
 	}
 	h := AuthMiddleware(cfg, inner)
 
-	req := httptest.NewRequest("GET", "/v1/policies", nil)
+	req := httptest.NewRequest("GET", "/rlaas/v1/policies", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -181,7 +181,7 @@ func TestAuthMiddleware_JWT_WrongRole(t *testing.T) {
 	}
 	h := AuthMiddleware(cfg, inner)
 
-	req := httptest.NewRequest("DELETE", "/v1/policies/123", nil)
+	req := httptest.NewRequest("DELETE", "/rlaas/v1/policies/123", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)

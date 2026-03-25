@@ -137,7 +137,7 @@ func TestLoadInvalidationTargets(t *testing.T) {
 func TestPublishInvalidation(t *testing.T) {
 	var calls atomic.Int64
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/agent/invalidate" || r.Method != http.MethodPost {
+		if r.URL.Path != "/rlaas/v1/agent/invalidate" || r.Method != http.MethodPost {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
@@ -158,7 +158,7 @@ func TestPublishInvalidation(t *testing.T) {
 func TestStartInvalidationDispatcher(t *testing.T) {
 	var calls atomic.Int64
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/v1/agent/invalidate" && r.Method == http.MethodPost {
+		if r.URL.Path == "/rlaas/v1/agent/invalidate" && r.Method == http.MethodPost {
 			calls.Add(1)
 			w.WriteHeader(http.StatusAccepted)
 			return
