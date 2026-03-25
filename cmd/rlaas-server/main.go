@@ -126,17 +126,17 @@ func runAll(cfg config.Config, listenFn func(config.Config, *server.HTTPServer) 
 	mux := httpServer.Mux
 
 	acquireHandler, releaseHandler := httpadapter.NewAcquireReleaseHandlers(client)
-	mux.Handle("/v1/acquire", acquireHandler)
-	mux.Handle("/v1/release", releaseHandler)
+	mux.Handle("/rlaas/v1/acquire", acquireHandler)
+	mux.Handle("/rlaas/v1/release", releaseHandler)
 
 	policiesHandler := httpadapter.PoliciesHandlerWithHooks(policyStore, func(ctx context.Context, topic string, event map[string]string) error {
 		_ = b.Publish(ctx, topic, event)
 		enqueueInvalidation(copyEvent(event))
 		return nil
 	}, analyticsRecorder.Record)
-	mux.Handle("/v1/policies", policiesHandler)
-	mux.Handle("/v1/policies/", policiesHandler)
-	mux.Handle("/v1/analytics/summary", analytics.SummaryHandler(analyticsRecorder))
+	mux.Handle("/rlaas/v1/policies", policiesHandler)
+	mux.Handle("/rlaas/v1/policies/", policiesHandler)
+	mux.Handle("/rlaas/v1/analytics/summary", analytics.SummaryHandler(analyticsRecorder))
 	mux.Handle("/metrics", metrics.PrometheusHandler(metricsCollector))
 
 	mw := httpadapter.NewMiddleware(client)
@@ -386,7 +386,7 @@ func publishInvalidation(ctx context.Context, client *http.Client, targets []str
 		go func() {
 			defer wg.Done()
 			for target := range jobs {
-				req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(target, "/")+"/v1/agent/invalidate", bytes.NewReader(body))
+				req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(target, "/")+"/rlaas/v1/agent/invalidate", bytes.NewReader(body))
 				if err != nil {
 					continue
 				}

@@ -53,19 +53,19 @@ func TestBuildServerHealthAndStatus(t *testing.T) {
 	}
 
 	r2 := httptest.NewRecorder()
-	s.Handler.ServeHTTP(r2, httptest.NewRequest(http.MethodGet, "/v1/agent/status", nil))
+	s.Handler.ServeHTTP(r2, httptest.NewRequest(http.MethodGet, "/rlaas/v1/agent/status", nil))
 	if r2.Code != http.StatusOK || !strings.Contains(r2.Body.String(), "sync_runs") {
 		t.Fatalf("expected status json")
 	}
 
 	r3 := httptest.NewRecorder()
-	s.Handler.ServeHTTP(r3, httptest.NewRequest(http.MethodGet, "/v1/agent/invalidate", nil))
+	s.Handler.ServeHTTP(r3, httptest.NewRequest(http.MethodGet, "/rlaas/v1/agent/invalidate", nil))
 	if r3.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("expected invalidate method not allowed")
 	}
 
 	r4 := httptest.NewRecorder()
-	s.Handler.ServeHTTP(r4, httptest.NewRequest(http.MethodPost, "/v1/agent/invalidate", strings.NewReader(`{"policy_id":"p1"}`)))
+	s.Handler.ServeHTTP(r4, httptest.NewRequest(http.MethodPost, "/rlaas/v1/agent/invalidate", strings.NewReader(`{"policy_id":"p1"}`)))
 	if r4.Code != http.StatusAccepted || !strings.Contains(r4.Body.String(), "queued") {
 		t.Fatalf("expected invalidate accepted response")
 	}
@@ -81,7 +81,7 @@ func TestBuildServerHealthAndStatus(t *testing.T) {
 
 func TestProxyCheckSuccessAndMethod(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/check" || r.Method != http.MethodPost {
+		if r.URL.Path != "/rlaas/v1/check" || r.Method != http.MethodPost {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -99,13 +99,13 @@ func TestProxyCheckSuccessAndMethod(t *testing.T) {
 	client := &http.Client{Timeout: time.Second}
 
 	methodRes := httptest.NewRecorder()
-	proxyCheck(methodRes, httptest.NewRequest(http.MethodGet, "/v1/check", nil), cfg, client)
+	proxyCheck(methodRes, httptest.NewRequest(http.MethodGet, "/rlaas/v1/check", nil), cfg, client)
 	if methodRes.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("expected method not allowed")
 	}
 
 	okRes := httptest.NewRecorder()
-	proxyCheck(okRes, httptest.NewRequest(http.MethodPost, "/v1/check", strings.NewReader(`{"request_id":"r1"}`)), cfg, client)
+	proxyCheck(okRes, httptest.NewRequest(http.MethodPost, "/rlaas/v1/check", strings.NewReader(`{"request_id":"r1"}`)), cfg, client)
 	if okRes.Code != http.StatusOK || !strings.Contains(okRes.Body.String(), "allowed") {
 		t.Fatalf("expected proxied response")
 	}
@@ -114,7 +114,7 @@ func TestProxyCheckSuccessAndMethod(t *testing.T) {
 func TestProxyCheckUpstreamUnavailable(t *testing.T) {
 	cfg := agentConfig{UpstreamBase: "http://127.0.0.1:1"}
 	res := httptest.NewRecorder()
-	proxyCheck(res, httptest.NewRequest(http.MethodPost, "/v1/check", strings.NewReader(`{}`)), cfg, &http.Client{Timeout: 50 * time.Millisecond})
+	proxyCheck(res, httptest.NewRequest(http.MethodPost, "/rlaas/v1/check", strings.NewReader(`{}`)), cfg, &http.Client{Timeout: 50 * time.Millisecond})
 	if res.Code != http.StatusBadGateway {
 		t.Fatalf("expected bad gateway")
 	}
@@ -122,7 +122,7 @@ func TestProxyCheckUpstreamUnavailable(t *testing.T) {
 
 func TestFetchPolicySnapshotAndSyncLoop(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/v1/policies" {
+		if r.URL.Path == "/rlaas/v1/policies" {
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte("[]"))
 			return

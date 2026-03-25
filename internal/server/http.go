@@ -47,7 +47,7 @@ func WithMaxHeaderBytes(n int) HTTPOption {
 }
 
 // NewHTTPServer registers service endpoints.
-// /v1/check returns decision responses.
+// /rlaas/v1/check returns decision responses.
 // /healthz returns plain ok when server is healthy.
 // /readyz returns 200 only after SetReady(true) is called.
 func NewHTTPServer(addr string, checkHandler http.Handler, opts ...HTTPOption) *HTTPServer {
@@ -64,7 +64,7 @@ func NewHTTPServer(addr string, checkHandler http.Handler, opts ...HTTPOption) *
 		o(s)
 	}
 
-	mux.Handle("/v1/check", checkHandler)
+	mux.Handle("/rlaas/v1/check", checkHandler)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
 	mux.HandleFunc("/readyz", func(w http.ResponseWriter, _ *http.Request) {
 		if s.ready.Load() {

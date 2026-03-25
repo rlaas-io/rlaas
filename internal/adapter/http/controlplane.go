@@ -221,7 +221,7 @@ func PoliciesHandlerWithConfig(ps store.PolicyStore, cfg policiesHandlerConfig) 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 		switch {
-		case r.Method == http.MethodGet && path == "/v1/policies":
+		case r.Method == http.MethodGet && path == "/rlaas/v1/policies":
 			list, err := ps.ListPolicies(r.Context(), map[string]string{})
 			if err != nil {
 				http.Error(w, "policy store error", http.StatusInternalServerError)
@@ -233,13 +233,13 @@ func PoliciesHandlerWithConfig(ps store.PolicyStore, cfg policiesHandlerConfig) 
 				cfg.analytics.Record(r.Context(), "policy_list", map[string]string{"status": "ok"})
 			}
 			return
-		case r.Method == http.MethodGet && strings.HasPrefix(path, "/v1/policies/") && strings.HasSuffix(path, "/audit"):
+		case r.Method == http.MethodGet && strings.HasPrefix(path, "/rlaas/v1/policies/") && strings.HasSuffix(path, "/audit"):
 			historyStore, ok := ps.(policyHistoryStore)
 			if !ok {
 				http.Error(w, "policy history not supported", http.StatusNotImplemented)
 				return
 			}
-			policyID := strings.TrimSuffix(strings.TrimPrefix(path, "/v1/policies/"), "/audit")
+			policyID := strings.TrimSuffix(strings.TrimPrefix(path, "/rlaas/v1/policies/"), "/audit")
 			if policyID == "" {
 				http.Error(w, "missing policy id", http.StatusBadRequest)
 				return
@@ -252,13 +252,13 @@ func PoliciesHandlerWithConfig(ps store.PolicyStore, cfg policiesHandlerConfig) 
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(entries)
 			return
-		case r.Method == http.MethodGet && strings.HasPrefix(path, "/v1/policies/") && strings.HasSuffix(path, "/versions"):
+		case r.Method == http.MethodGet && strings.HasPrefix(path, "/rlaas/v1/policies/") && strings.HasSuffix(path, "/versions"):
 			historyStore, ok := ps.(policyHistoryStore)
 			if !ok {
 				http.Error(w, "policy versions not supported", http.StatusNotImplemented)
 				return
 			}
-			policyID := strings.TrimSuffix(strings.TrimPrefix(path, "/v1/policies/"), "/versions")
+			policyID := strings.TrimSuffix(strings.TrimPrefix(path, "/rlaas/v1/policies/"), "/versions")
 			if policyID == "" {
 				http.Error(w, "missing policy id", http.StatusBadRequest)
 				return
@@ -271,8 +271,8 @@ func PoliciesHandlerWithConfig(ps store.PolicyStore, cfg policiesHandlerConfig) 
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(versions)
 			return
-		case r.Method == http.MethodGet && strings.HasPrefix(path, "/v1/policies/"):
-			id := strings.TrimPrefix(path, "/v1/policies/")
+		case r.Method == http.MethodGet && strings.HasPrefix(path, "/rlaas/v1/policies/"):
+			id := strings.TrimPrefix(path, "/rlaas/v1/policies/")
 			if id == "" {
 				http.Error(w, "missing policy id", http.StatusBadRequest)
 				return
@@ -285,7 +285,7 @@ func PoliciesHandlerWithConfig(ps store.PolicyStore, cfg policiesHandlerConfig) 
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(p)
 			return
-		case r.Method == http.MethodPost && path == "/v1/policies":
+		case r.Method == http.MethodPost && path == "/rlaas/v1/policies":
 			var p model.Policy
 			if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
 				http.Error(w, "invalid request", http.StatusBadRequest)
@@ -307,7 +307,7 @@ func PoliciesHandlerWithConfig(ps store.PolicyStore, cfg policiesHandlerConfig) 
 			w.WriteHeader(http.StatusCreated)
 			_ = json.NewEncoder(w).Encode(p)
 			return
-		case r.Method == http.MethodPost && path == "/v1/policies/validate":
+		case r.Method == http.MethodPost && path == "/rlaas/v1/policies/validate":
 			var p model.Policy
 			if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
 				http.Error(w, "invalid request", http.StatusBadRequest)
@@ -323,13 +323,13 @@ func PoliciesHandlerWithConfig(ps store.PolicyStore, cfg policiesHandlerConfig) 
 				cfg.analytics.Record(r.Context(), "policy_validate", map[string]string{"status": "ok"})
 			}
 			return
-		case r.Method == http.MethodPost && strings.HasPrefix(path, "/v1/policies/") && strings.HasSuffix(path, "/rollback"):
+		case r.Method == http.MethodPost && strings.HasPrefix(path, "/rlaas/v1/policies/") && strings.HasSuffix(path, "/rollback"):
 			historyStore, ok := ps.(policyHistoryStore)
 			if !ok {
 				http.Error(w, "policy rollback not supported", http.StatusNotImplemented)
 				return
 			}
-			id := strings.TrimSuffix(strings.TrimPrefix(path, "/v1/policies/"), "/rollback")
+			id := strings.TrimSuffix(strings.TrimPrefix(path, "/rlaas/v1/policies/"), "/rollback")
 			if id == "" {
 				http.Error(w, "missing policy id", http.StatusBadRequest)
 				return
@@ -370,8 +370,8 @@ func PoliciesHandlerWithConfig(ps store.PolicyStore, cfg policiesHandlerConfig) 
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(restore)
 			return
-		case r.Method == http.MethodPost && strings.HasPrefix(path, "/v1/policies/") && strings.HasSuffix(path, "/rollout"):
-			id := strings.TrimSuffix(strings.TrimPrefix(path, "/v1/policies/"), "/rollout")
+		case r.Method == http.MethodPost && strings.HasPrefix(path, "/rlaas/v1/policies/") && strings.HasSuffix(path, "/rollout"):
+			id := strings.TrimSuffix(strings.TrimPrefix(path, "/rlaas/v1/policies/"), "/rollout")
 			if id == "" {
 				http.Error(w, "missing policy id", http.StatusBadRequest)
 				return
@@ -406,8 +406,8 @@ func PoliciesHandlerWithConfig(ps store.PolicyStore, cfg policiesHandlerConfig) 
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(p)
 			return
-		case r.Method == http.MethodPut && strings.HasPrefix(path, "/v1/policies/"):
-			id := strings.TrimPrefix(path, "/v1/policies/")
+		case r.Method == http.MethodPut && strings.HasPrefix(path, "/rlaas/v1/policies/"):
+			id := strings.TrimPrefix(path, "/rlaas/v1/policies/")
 			if id == "" {
 				http.Error(w, "missing policy id", http.StatusBadRequest)
 				return
@@ -430,8 +430,8 @@ func PoliciesHandlerWithConfig(ps store.PolicyStore, cfg policiesHandlerConfig) 
 			}
 			_ = json.NewEncoder(w).Encode(p)
 			return
-		case r.Method == http.MethodDelete && strings.HasPrefix(path, "/v1/policies/"):
-			id := strings.TrimPrefix(path, "/v1/policies/")
+		case r.Method == http.MethodDelete && strings.HasPrefix(path, "/rlaas/v1/policies/"):
+			id := strings.TrimPrefix(path, "/rlaas/v1/policies/")
 			if id == "" {
 				http.Error(w, "missing policy id", http.StatusBadRequest)
 				return
