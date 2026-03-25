@@ -78,7 +78,6 @@ func (e *Evaluator) Evaluate(ctx context.Context, policy model.Policy, req model
 
 		// On first request, initialize empty bucket.
 		if lastNanos == 0 {
-			curLevel = 0
 			lastNanos = now.UnixNano()
 		}
 
