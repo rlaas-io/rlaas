@@ -4,40 +4,41 @@ linters:
   default: none
   enable:
     - errcheck      # unhandled errors
-    - govet         # suspicious constructs (shadow, printf, structtag)
+    - govet         # suspicious constructs
     - gosimple      # simplification opportunities
     - staticcheck   # comprehensive static analysis
     - ineffassign   # ineffectual assignments
-    - gofmt         # formatting
-    - goimports     # import ordering/grouping
-    - misspell      # common spelling mistakes in comments/strings
+    - misspell      # common spelling mistakes
     - unconvert     # unnecessary type conversions
     - unparam       # unused function parameters
+  settings:
+    errcheck:
+      check-blank: false
+      check-type-assertions: false
+    govet:
+      enable:
+        - shadow
+        - printf
+        - structtag
 
-linters-settings:
-  errcheck:
-    # Ignore intentional blank-identifier discards (e.g. _ = w.Write(...))
-    check-blank: false
-    # Type assertions in tests are fine without checking
-    check-type-assertions: false
-  govet:
-    enable:
-      - shadow
-      - printf
-      - structtag
-  goimports:
-    local-prefixes: github.com/rlaas-io/rlaas
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/rlaas-io/rlaas
 
 issues:
   max-issues-per-linter: 50
   max-same-issues: 10
-  exclude-rules:
-    # Test files: relax errcheck (intentional ignores) and unparam
-    - path: "_test\\.go"
-      linters:
-        - errcheck
-        - unparam
-    # Generated protobuf code
-    - path: "api/proto"
-      linters:
-        - all
+  exclusions:
+    rules:
+      - path: "_test\\.go"
+        linters:
+          - errcheck
+          - unparam
+      - path: "api/proto"
+        linters:
+          - all
