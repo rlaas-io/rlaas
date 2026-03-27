@@ -8,7 +8,6 @@ linters:
     - gosimple      # simplification opportunities
     - staticcheck   # comprehensive static analysis
     - ineffassign   # ineffectual assignments
-    - typecheck     # basic type errors
     - gofmt         # formatting
     - goimports     # import ordering/grouping
     - misspell      # common spelling mistakes in comments/strings
