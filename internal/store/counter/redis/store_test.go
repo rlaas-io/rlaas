@@ -40,7 +40,7 @@ func TestRedisStoreOps(t *testing.T) {
 	if err := s.Delete(ctx, "k"); err != nil {
 		t.Fatalf("delete failed")
 	}
-	if g0, err := s.Get(ctx, "missing"); err != nil || g0 != 0 {
+	if g0, getErr := s.Get(ctx, "missing"); getErr != nil || g0 != 0 {
 		t.Fatalf("missing key should return zero")
 	}
 	if err := s.client.Set(ctx, "badint", "abc", time.Second).Err(); err != nil {

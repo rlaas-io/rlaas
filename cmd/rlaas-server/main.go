@@ -17,6 +17,8 @@ import (
 	"syscall"
 	"time"
 
+	"google.golang.org/grpc"
+
 	rlaasv1 "github.com/rlaas-io/rlaas/api/proto"
 	grpcadapter "github.com/rlaas-io/rlaas/internal/adapter/grpc"
 	httpadapter "github.com/rlaas-io/rlaas/internal/adapter/http"
@@ -29,8 +31,6 @@ import (
 	filestore "github.com/rlaas-io/rlaas/internal/store/policy/file"
 	"github.com/rlaas-io/rlaas/internal/version"
 	"github.com/rlaas-io/rlaas/pkg/rlaas"
-
-	"google.golang.org/grpc"
 )
 
 // main starts the RLAAS server with production-safe defaults.  Config is
