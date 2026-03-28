@@ -39,7 +39,12 @@ permissions:
 
 jobs:
   release:
+    # Hard gate: job is skipped entirely if triggered by anyone other than the repo owner.
+    # Configure the 'sdk-release' environment in repo Settings → Environments with
+    # Required reviewers set to @suresh-p26 for an additional UI-level approval gate.
+    if: github.actor == 'suresh-p26'
     runs-on: ubuntu-latest
+    environment: sdk-release
 
     env:
       RELEASE_TAG: ${{ inputs.tag }}
