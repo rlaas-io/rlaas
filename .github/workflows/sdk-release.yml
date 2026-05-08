@@ -1,11 +1,15 @@
 name: SDK Release
 
 on:
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag (example: v1.1.1)"
-        required: true
+        description: "Release tag (example: v1.1.1). Optional for manual runs; defaults to current ref if omitted."
+        required: false
+        default: ""
         type: string
       publish_python:
         description: Publish Python SDK to PyPI
@@ -14,6 +18,11 @@ on:
         type: boolean
       publish_typescript:
         description: Publish TypeScript SDK to npm
+        required: true
+        default: true
+        type: boolean
+      publish_nodejs:
+        description: Publish Node.js SDK to npm
         required: true
         default: true
         type: boolean
@@ -27,6 +36,21 @@ on:
         required: true
         default: true
         type: boolean
+      publish_ruby:
+        description: Publish Ruby SDK to RubyGems
+        required: true
+        default: true
+        type: boolean
+      publish_rust:
+        description: Publish Rust SDK to crates.io
+        required: true
+        default: true
+        type: boolean
+      publish_cpp:
+        description: Build and publish C++ SDK archive to GitHub Release assets
+        required: true
+        default: true
+        type: boolean
       dry_run:
         description: Build/pack only, do not publish
         required: true
@@ -34,16 +58,13 @@ on:
         type: boolean
 
 permissions:
-  contents: read
+  contents: write
   packages: write
 
 jobs:
   release:
     if: github.actor == 'suresh-p26'
     runs-on: ubuntu-latest
-
-    env:
-      RELEASE_TAG: ${{ inputs.tag }}
 
     steps:
       - name: Checkout
@@ -82,25 +103,62 @@ jobs:
           echo "Actor $ACTOR is not listed in CODEOWNERS and cannot run SDK release workflow"
           exit 1
 
-      - name: Validate tag and derive version
+      - name: Resolve release switches and tag
         shell: bash
         run: |
-          if [[ ! "${RELEASE_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-.][A-Za-z0-9]+)*$ ]]; then
-            echo "Invalid tag: ${RELEASE_TAG}. Expected vX.Y.Z or pre-release variants."
+          set -euo pipefail
+
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            tag="${{ inputs.tag }}"
+            if [[ -z "$tag" ]]; then
+              if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+                tag="${GITHUB_REF_NAME}"
+              else
+                echo "Manual run requires inputs.tag when not running from a tag ref"
+                exit 1
+              fi
+            fi
+
+            echo "PUBLISH_PYTHON=${{ inputs.publish_python }}" >> "$GITHUB_ENV"
+            echo "PUBLISH_TYPESCRIPT=${{ inputs.publish_typescript }}" >> "$GITHUB_ENV"
+            echo "PUBLISH_NODEJS=${{ inputs.publish_nodejs }}" >> "$GITHUB_ENV"
+            echo "PUBLISH_JAVA=${{ inputs.publish_java }}" >> "$GITHUB_ENV"
+            echo "PUBLISH_DOTNET=${{ inputs.publish_dotnet }}" >> "$GITHUB_ENV"
+            echo "PUBLISH_RUBY=${{ inputs.publish_ruby }}" >> "$GITHUB_ENV"
+            echo "PUBLISH_RUST=${{ inputs.publish_rust }}" >> "$GITHUB_ENV"
+            echo "PUBLISH_CPP=${{ inputs.publish_cpp }}" >> "$GITHUB_ENV"
+            echo "DRY_RUN=${{ inputs.dry_run }}" >> "$GITHUB_ENV"
+          else
+            tag="${GITHUB_REF_NAME}"
+            echo "PUBLISH_PYTHON=true" >> "$GITHUB_ENV"
+            echo "PUBLISH_TYPESCRIPT=true" >> "$GITHUB_ENV"
+            echo "PUBLISH_NODEJS=true" >> "$GITHUB_ENV"
+            echo "PUBLISH_JAVA=true" >> "$GITHUB_ENV"
+            echo "PUBLISH_DOTNET=true" >> "$GITHUB_ENV"
+            echo "PUBLISH_RUBY=true" >> "$GITHUB_ENV"
+            echo "PUBLISH_RUST=true" >> "$GITHUB_ENV"
+            echo "PUBLISH_CPP=true" >> "$GITHUB_ENV"
+            echo "DRY_RUN=false" >> "$GITHUB_ENV"
+          fi
+
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-.][A-Za-z0-9]+)*$ ]]; then
+            echo "Invalid tag: $tag. Expected vX.Y.Z or pre-release variants."
             exit 1
           fi
-          VERSION="${RELEASE_TAG#v}"
-          echo "SDK_VERSION=${VERSION}" >> "$GITHUB_ENV"
-          echo "Using SDK version ${VERSION}"
+
+          version="${tag#v}"
+          echo "RELEASE_TAG=$tag" >> "$GITHUB_ENV"
+          echo "SDK_VERSION=$version" >> "$GITHUB_ENV"
+          echo "Using SDK version $version from tag $tag"
 
       - name: Setup Python
-        if: ${{ inputs.publish_python }}
+        if: env.PUBLISH_PYTHON == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
       - name: Build and publish Python SDK
-        if: ${{ inputs.publish_python }}
+        if: env.PUBLISH_PYTHON == 'true'
         shell: bash
         env:
           PYPI_API_TOKEN: ${{ secrets['PYPI_API_TOKEN'] }}
@@ -112,17 +170,19 @@ jobs:
 
           python - <<'PY'
           from pathlib import Path
+          import os
           import re
+
           path = Path("pyproject.toml")
           text = path.read_text(encoding="utf-8")
-          text = re.sub(r'(?m)^version\s*=\s*"[^"]+"', f'version = "{__import__("os").environ["SDK_VERSION"]}"', text)
+          text = re.sub(r'(?m)^version\s*=\s*"[^"]+"', f'version = "{os.environ["SDK_VERSION"]}"', text)
           path.write_text(text, encoding="utf-8")
           PY
 
           python -m build
           twine check dist/*
 
-          if [[ "${{ inputs.dry_run }}" == "true" ]]; then
+          if [[ "$DRY_RUN" == "true" ]]; then
             echo "dry_run=true, skipping PyPI upload"
             exit 0
           fi
@@ -134,14 +194,14 @@ jobs:
           twine upload -u __token__ -p "${PYPI_API_TOKEN}" dist/*
 
       - name: Setup Node
-        if: ${{ inputs.publish_typescript }}
+        if: env.PUBLISH_TYPESCRIPT == 'true' || env.PUBLISH_NODEJS == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: "20"
           registry-url: "https://registry.npmjs.org"
 
       - name: Build and publish TypeScript SDK
-        if: ${{ inputs.publish_typescript }}
+        if: env.PUBLISH_TYPESCRIPT == 'true'
         shell: bash
         env:
           NODE_AUTH_TOKEN: ${{ secrets['NPM_TOKEN'] }}
@@ -153,7 +213,30 @@ jobs:
           npm version "${SDK_VERSION}" --no-git-tag-version
           npm run build
 
-          if [[ "${{ inputs.dry_run }}" == "true" ]]; then
+          if [[ "$DRY_RUN" == "true" ]]; then
+            npm pack
+            echo "dry_run=true, skipping npm publish"
+            exit 0
+          fi
+
+          if [[ -z "${NODE_AUTH_TOKEN:-}" ]]; then
+            echo "Missing secret: NPM_TOKEN"
+            exit 1
+          fi
+          npm publish --access public
+
+      - name: Build and publish Node.js SDK
+        if: env.PUBLISH_NODEJS == 'true'
+        shell: bash
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets['NPM_TOKEN'] }}
+        run: |
+          set -euo pipefail
+          cd sdk/nodejs
+
+          npm version "${SDK_VERSION}" --no-git-tag-version
+
+          if [[ "$DRY_RUN" == "true" ]]; then
             npm pack
             echo "dry_run=true, skipping npm publish"
             exit 0
@@ -166,14 +249,14 @@ jobs:
           npm publish --access public
 
       - name: Setup Java
-        if: ${{ inputs.publish_java }}
+        if: env.PUBLISH_JAVA == 'true'
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
 
       - name: Build and publish Java SDK (GitHub Packages Maven)
-        if: ${{ inputs.publish_java }}
+        if: env.PUBLISH_JAVA == 'true'
         shell: bash
         env:
           MAVEN_USERNAME: ${{ secrets['MAVEN_USERNAME'] }}
@@ -187,7 +270,7 @@ jobs:
           mvn -B -q versions:set -DnewVersion="${SDK_VERSION}" -DgenerateBackupPoms=false
           mvn -B -q -DskipTests package
 
-          if [[ "${{ inputs.dry_run }}" == "true" ]]; then
+          if [[ "$DRY_RUN" == "true" ]]; then
             echo "dry_run=true, skipping Maven publish"
             exit 0
           fi
@@ -216,13 +299,13 @@ jobs:
             -DaltDeploymentRepository=github::default::https://maven.pkg.github.com/rlaas-io/rlaas
 
       - name: Setup .NET
-        if: ${{ inputs.publish_dotnet }}
+        if: env.PUBLISH_DOTNET == 'true'
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "8.0.x"
 
       - name: Build and publish .NET SDK
-        if: ${{ inputs.publish_dotnet }}
+        if: env.PUBLISH_DOTNET == 'true'
         shell: bash
         env:
           NUGET_API_KEY: ${{ secrets['NUGET_API_KEY'] }}
@@ -233,7 +316,7 @@ jobs:
           dotnet restore
           dotnet pack -c Release -p:PackageVersion="${SDK_VERSION}" -p:Version="${SDK_VERSION}"
 
-          if [[ "${{ inputs.dry_run }}" == "true" ]]; then
+          if [[ "$DRY_RUN" == "true" ]]; then
             echo "dry_run=true, skipping NuGet publish"
             exit 0
           fi
@@ -243,3 +326,108 @@ jobs:
             exit 1
           fi
           dotnet nuget push bin/Release/*.nupkg --source https://api.nuget.org/v3/index.json --api-key "${NUGET_API_KEY}" --skip-duplicate
+
+      - name: Setup Ruby
+        if: env.PUBLISH_RUBY == 'true'
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+
+      - name: Build and publish Ruby SDK
+        if: env.PUBLISH_RUBY == 'true'
+        shell: bash
+        env:
+          RUBYGEMS_API_KEY: ${{ secrets['RUBYGEMS_API_KEY'] }}
+        run: |
+          set -euo pipefail
+          cd sdk/ruby
+
+          sed -i -E "s/spec.version\s*=\s*\"[^\"]+\"/spec.version       = \"${SDK_VERSION}\"/" rlaas_sdk.gemspec
+          gem build rlaas_sdk.gemspec
+
+          if [[ "$DRY_RUN" == "true" ]]; then
+            echo "dry_run=true, skipping RubyGems publish"
+            exit 0
+          fi
+
+          if [[ -z "${RUBYGEMS_API_KEY:-}" ]]; then
+            echo "Missing secret: RUBYGEMS_API_KEY"
+            exit 1
+          fi
+
+          mkdir -p ~/.gem
+          cat > ~/.gem/credentials <<EOF
+          ---
+          :rubygems_api_key: ${RUBYGEMS_API_KEY}
+          EOF
+          chmod 0600 ~/.gem/credentials
+
+          gem push "rlaas-sdk-${SDK_VERSION}.gem"
+
+      - name: Setup Rust
+        if: env.PUBLISH_RUST == 'true'
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build and publish Rust SDK
+        if: env.PUBLISH_RUST == 'true'
+        shell: bash
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets['CARGO_REGISTRY_TOKEN'] }}
+        run: |
+          set -euo pipefail
+          cd sdk/rust
+
+          sed -i -E "s/^version\s*=\s*\"[^\"]+\"/version     = \"${SDK_VERSION}\"/" Cargo.toml
+          cargo package --allow-dirty
+
+          if [[ "$DRY_RUN" == "true" ]]; then
+            echo "dry_run=true, skipping crates.io publish"
+            exit 0
+          fi
+
+          if [[ -z "${CARGO_REGISTRY_TOKEN:-}" ]]; then
+            echo "Missing secret: CARGO_REGISTRY_TOKEN"
+            exit 1
+          fi
+          cargo publish --allow-dirty
+
+      - name: Setup C++ toolchain
+        if: env.PUBLISH_CPP == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build g++ libcurl4-openssl-dev
+
+      - name: Build and package C++ SDK
+        if: env.PUBLISH_CPP == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd sdk/cpp
+
+          sed -i -E "s/project\(rlaas_sdk VERSION [0-9]+\.[0-9]+\.[0-9]+/project(rlaas_sdk VERSION ${SDK_VERSION}/" CMakeLists.txt
+
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --config Release
+          cmake --install build --prefix dist
+
+          archive="rlaas-cpp-sdk-${SDK_VERSION}-linux-x64.tar.gz"
+          tar -C dist -czf "$archive" .
+          mkdir -p "$GITHUB_WORKSPACE/sdk-artifacts"
+          mv "$archive" "$GITHUB_WORKSPACE/sdk-artifacts/"
+
+      - name: Upload C++ package artifact
+        if: env.PUBLISH_CPP == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: cpp-sdk-${{ env.SDK_VERSION }}
+          path: sdk-artifacts/rlaas-cpp-sdk-${{ env.SDK_VERSION }}-linux-x64.tar.gz
+
+      - name: Publish C++ package to GitHub Release assets
+        if: env.PUBLISH_CPP == 'true' && env.DRY_RUN != 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          files: |
+            sdk-artifacts/rlaas-cpp-sdk-${{ env.SDK_VERSION }}-linux-x64.tar.gz
