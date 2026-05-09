@@ -191,7 +191,8 @@ jobs:
             echo "Missing secret: PYPI_API_TOKEN"
             exit 1
           fi
-          twine upload -u __token__ -p "${PYPI_API_TOKEN}" dist/*
+          # PyPI versions are immutable; allow safe re-runs for the same tag.
+          twine upload --skip-existing -u __token__ -p "${PYPI_API_TOKEN}" dist/*
 
       - name: Setup Node
         if: env.PUBLISH_TYPESCRIPT == 'true' || env.PUBLISH_NODEJS == 'true'
@@ -209,7 +210,11 @@ jobs:
           set -euo pipefail
           cd sdk/typescript
 
-          npm ci
+          if [[ -f package-lock.json || -f npm-shrinkwrap.json ]]; then
+            npm ci
+          else
+            npm install --no-audit --no-fund
+          fi
           npm version "${SDK_VERSION}" --no-git-tag-version
           npm run build
 
@@ -222,6 +227,12 @@ jobs:
           if [[ -z "${NODE_AUTH_TOKEN:-}" ]]; then
             echo "Missing secret: NPM_TOKEN"
             exit 1
+          fi
+
+          pkg_name=$(node -p "require('./package.json').name")
+          if npm view "${pkg_name}@${SDK_VERSION}" version >/dev/null 2>&1; then
+            echo "${pkg_name}@${SDK_VERSION} already exists on npm; skipping publish"
+            exit 0
           fi
           npm publish --access public
 
@@ -245,6 +256,12 @@ jobs:
           if [[ -z "${NODE_AUTH_TOKEN:-}" ]]; then
             echo "Missing secret: NPM_TOKEN"
             exit 1
+          fi
+
+          pkg_name=$(node -p "require('./package.json').name")
+          if npm view "${pkg_name}@${SDK_VERSION}" version >/dev/null 2>&1; then
+            echo "${pkg_name}@${SDK_VERSION} already exists on npm; skipping publish"
+            exit 0
           fi
           npm publish --access public
 
@@ -295,8 +312,20 @@ jobs:
           </settings>
           XML
 
+          set +e
           mvn -B -q -s /tmp/settings.xml -DskipTests deploy \
-            -DaltDeploymentRepository=github::default::https://maven.pkg.github.com/rlaas-io/rlaas
+            -DaltDeploymentRepository=github::default::https://maven.pkg.github.com/rlaas-io/rlaas \
+            2>&1 | tee /tmp/maven-deploy.log
+          deploy_status=${PIPESTATUS[0]}
+          set -e
+
+          if [[ ${deploy_status} -ne 0 ]]; then
+            if grep -Eiq "409|already exists|cannot be updated" /tmp/maven-deploy.log; then
+              echo "Java package version already exists in GitHub Packages; skipping"
+              exit 0
+            fi
+            exit ${deploy_status}
+          fi
 
       - name: Setup .NET
         if: env.PUBLISH_DOTNET == 'true'
@@ -362,6 +391,11 @@ jobs:
           EOF
           chmod 0600 ~/.gem/credentials
 
+          if gem list -r "^rlaas-sdk$" -a | grep -Eq "(^|[ (,])${SDK_VERSION}([,)]|$)"; then
+            echo "rlaas-sdk ${SDK_VERSION} already exists on RubyGems; skipping publish"
+            exit 0
+          fi
+
           gem push "rlaas-sdk-${SDK_VERSION}.gem"
 
       - name: Setup Rust
@@ -388,6 +422,11 @@ jobs:
           if [[ -z "${CARGO_REGISTRY_TOKEN:-}" ]]; then
             echo "Missing secret: CARGO_REGISTRY_TOKEN"
             exit 1
+          fi
+
+          if curl -fsSL "https://crates.io/api/v1/crates/rlaas-sdk/${SDK_VERSION}" >/dev/null 2>&1; then
+            echo "rlaas-sdk ${SDK_VERSION} already exists on crates.io; skipping publish"
+            exit 0
           fi
           cargo publish --allow-dirty
 
@@ -429,5 +468,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
+          overwrite_files: true
           files: |
             sdk-artifacts/rlaas-cpp-sdk-${{ env.SDK_VERSION }}-linux-x64.tar.gz
