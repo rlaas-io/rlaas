@@ -50,6 +50,38 @@ func TestFixedWindowErrorAndDefaultLimit(t *testing.T) {
 	assert.True(t, d.Allowed, "should allow with default limit")
 }
 
+type fwCASErrStore struct{ store.CounterStore }
+
+func (fwCASErrStore) Get(_ context.Context, _ string) (int64, error) { return 0, nil }
+func (fwCASErrStore) CompareAndSwap(_ context.Context, _ string, _, _ int64, _ time.Duration) (bool, error) {
+	return false, errors.New("cas error")
+}
+
+type fwCASAlwaysFalseStore struct{ store.CounterStore }
+
+func (fwCASAlwaysFalseStore) Get(_ context.Context, _ string) (int64, error) { return 0, nil }
+func (fwCASAlwaysFalseStore) CompareAndSwap(_ context.Context, _ string, _, _ int64, _ time.Duration) (bool, error) {
+	return false, nil
+}
+
+func TestFixedWindow_CASError(t *testing.T) {
+	e := New(fwCASErrStore{})
+	e.Now = func() time.Time { return time.Unix(1000, 0) }
+	p := model.Policy{Algorithm: model.AlgorithmConfig{Limit: 10, Window: "1m"}, Action: model.ActionDeny}
+	_, err := e.Evaluate(context.Background(), p, model.RequestContext{}, "k")
+	require.Error(t, err)
+}
+
+func TestFixedWindow_ContentionExhaustsRetries(t *testing.T) {
+	e := New(fwCASAlwaysFalseStore{})
+	e.Now = func() time.Time { return time.Unix(1000, 0) }
+	p := model.Policy{Algorithm: model.AlgorithmConfig{Limit: 10, Window: "1m"}, Action: model.ActionDeny}
+	d, err := e.Evaluate(context.Background(), p, model.RequestContext{}, "k")
+	require.NoError(t, err)
+	assert.False(t, d.Allowed, "contention exhaustion should deny")
+	assert.Equal(t, "fixed_window_contention", d.Reason)
+}
+
 func TestFixedWindow_SubSecondWindowUsesDistinctBuckets(t *testing.T) {
 	e := New(memory.New())
 	now := time.Unix(1000, 100*int64(time.Millisecond))

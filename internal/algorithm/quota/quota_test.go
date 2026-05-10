@@ -63,6 +63,13 @@ func TestQuota_SubSecondPeriodUsesDistinctBuckets(t *testing.T) {
 	assert.True(t, d.Allowed, "next sub-second period should use a new bucket")
 }
 
+type quotaCASErrStore struct{ store.CounterStore }
+
+func (quotaCASErrStore) Get(_ context.Context, _ string) (int64, error) { return 0, nil }
+func (quotaCASErrStore) CompareAndSwap(_ context.Context, _ string, _, _ int64, _ time.Duration) (bool, error) {
+	return false, errors.New("cas error")
+}
+
 func TestQuota_ContentionExhaustsRetries(t *testing.T) {
 	e := New(quotaCASFalseStore{})
 	e.Now = func() time.Time { return time.Unix(1000, 0) }
@@ -72,4 +79,46 @@ func TestQuota_ContentionExhaustsRetries(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, d.Allowed, "contention exhaustion should deny")
 	assert.Equal(t, "quota_contention", d.Reason)
+}
+
+func TestQuota_CASError(t *testing.T) {
+	e := New(quotaCASErrStore{})
+	e.Now = func() time.Time { return time.Unix(1000, 0) }
+	p := model.Policy{Algorithm: model.AlgorithmConfig{Limit: 10, QuotaPeriod: "day"}, Action: model.ActionDeny}
+	_, err := e.Evaluate(context.Background(), p, model.RequestContext{}, "k")
+	require.Error(t, err)
+}
+
+func TestQuota_DefaultPeriod(t *testing.T) {
+	// QuotaPeriod="" should default to "day".
+	e := New(memory.New())
+	e.Now = func() time.Time { return time.Unix(86400, 0) } // any time in a day bucket
+	p := model.Policy{Algorithm: model.AlgorithmConfig{Limit: 2}, Action: model.ActionDeny}
+
+	d, err := e.Evaluate(context.Background(), p, model.RequestContext{}, "k")
+	require.NoError(t, err)
+	assert.True(t, d.Allowed, "first within default-period quota should allow")
+
+	d, err = e.Evaluate(context.Background(), p, model.RequestContext{}, "k")
+	require.NoError(t, err)
+	assert.True(t, d.Allowed, "second within default-period quota should allow")
+
+	d, err = e.Evaluate(context.Background(), p, model.RequestContext{}, "k")
+	require.NoError(t, err)
+	assert.False(t, d.Allowed, "third should deny when limit exhausted")
+}
+
+func TestQuota_DefaultLimit(t *testing.T) {
+	// Limit=0 is normalised to 1.
+	e := New(memory.New())
+	e.Now = func() time.Time { return time.Unix(86400, 0) }
+	p := model.Policy{Algorithm: model.AlgorithmConfig{Limit: 0, QuotaPeriod: "day"}, Action: model.ActionDeny}
+
+	d, err := e.Evaluate(context.Background(), p, model.RequestContext{}, "k")
+	require.NoError(t, err)
+	assert.True(t, d.Allowed, "first request should allow with default limit=1")
+
+	d, err = e.Evaluate(context.Background(), p, model.RequestContext{}, "k")
+	require.NoError(t, err)
+	assert.False(t, d.Allowed, "second request should deny with default limit=1")
 }
